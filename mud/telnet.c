@@ -1,4 +1,4 @@
-#include "protocols.h"
+#include "telnet.h"
 #include "stdlib.h"
 #include "memory.h"
 #include "../itoa.h"

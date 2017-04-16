@@ -6,14 +6,19 @@
 struct minfo {
   int id;
   char* name;
+
   char* address;
   int port;
   int socket;
+
   int use_ssl;
   SSL* ssl;
+
   char* read_buffer;
   char* line_buffer;
   int line_length;
+
+  struct mcp_state* mcp_state;
 };
 
 char** get_line_buffer();

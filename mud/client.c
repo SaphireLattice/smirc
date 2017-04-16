@@ -10,7 +10,7 @@
 
 #include "client.h"
 #include "../ssl.h"
-#include "protocols.h"
+#include "telnet.h"
 #include "mcp.h"
 #ifndef STANDALONE_MUD
 # include "../irc/client.h"
@@ -163,7 +163,7 @@ void* mud_connect(void* arg) {
         for (int i = 0; mud->read_buffer[i] != 0; i++) {
             switch(mud->read_buffer[i]) {
                 case IAC:
-                    printf("> IAC ");
+                    printf("T> IAC ");
                     char next = mud->read_buffer[++i];
                     char *cmd = ttoa((unsigned int) next);
                     printf("%s ", cmd);
@@ -187,12 +187,15 @@ void* mud_connect(void* arg) {
                 case '\n':
                     mud->line_buffer[mud->line_length] = mud->read_buffer[i];
                     if (mud->line_length > 3 && memcmp(mud->line_buffer, "#$#", 3) == 0)
-                        mcp_parse(mud);
+                        if(mud->mcp_state == 0)
+                            mcp_first(mud);
+                        else
+                            mcp_parse(mud);
                     else
 #ifndef STANDALONE_MUD
                         send_line_irc(mud->line_buffer);
 #else
-                        printf("> %s", mud->line_buffer);
+                        printf(" > %s", mud->line_buffer);
 #endif
                     mud->line_length = 0;
                     bzero(mud->line_buffer, 1024);

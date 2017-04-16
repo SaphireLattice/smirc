@@ -13,7 +13,7 @@ set(IRC_SOURCES
         irc/client.c)
 set(MUD_SOURCES
         mud/client.c
-        mud/protocols.c
+        mud/telnet.c
         mud/mcp.c
         ssl.c)
 set(SMIRC
