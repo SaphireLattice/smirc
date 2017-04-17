@@ -28,7 +28,9 @@ target_link_libraries(smirc
         ${OPENSSL_LIBRARIES})
 
 add_executable(colortest
-        color_test.c)
+        color_test.c
+        mud/telnet.c
+        ${COMMON_SOURCES})
 
 add_executable(mudtest
         mud/main.c
