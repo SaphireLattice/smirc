@@ -2,6 +2,7 @@
 #include "stdlib.h"
 #include "memory.h"
 #include "../itoa.h"
+#include <stdio.h>
 
 const char* colors = "01,04,03,07,02,06,11,15,99,99,";
 
@@ -64,7 +65,7 @@ char* ttoa(unsigned int code) {
 char* ansi_to_irc_color(char* str) {
     int sl = (int) strlen(str);
     char* ret = calloc(sizeof(char), strlen(str) + 1);
-    bzero(ret, strlen(str) + 1);
+    memset(ret, 0, strlen(str) + 1);
     int sp, rp;
     sp = 0;
     rp = 0;
@@ -82,37 +83,44 @@ char* ansi_to_irc_color(char* str) {
             if (str[sp] == ';' || str[sp] == 'm') {
                 int c = atoi(code);
                 cp = 0;
-                bzero(code, 3);
+                memset(code, 0, 3);
+
+                if (c >= 30 && c < 37)
+                    state->fg = c - 30;
+                if (c == 37)
+                    state->fg = -1;
+                if (c == 39)
+                    state->fg = -1;
+
                 if (c == 40)
                     state->bg = -1;
-                if (c >= 41 && c < 50)
+                if (c >= 41 && c < 48)
                     state->bg = c - 40;
-                if (c >= 30 && c < 40) {
-                    if (c == 37)
-                        state->fg = -1;
-                    else
-                        state->fg = c - 30;
-                }
+                if (c == 49)
+                    state->bg = -1;
+
                 if (c == 0) {
+                    state->fg = -1;
+                    state->bg = -1;
                     ret[rp++] = '\x0f';
                 }
             } else {
                 code[cp++] = str[sp];
             }
             if (str[sp] == 'm') {
-                if (state->fg != -1 && state->bg != -1) {
+                printf("%i %i\n", state->fg, state->bg);
+                if (state->fg != -1 || state->bg != -1) {
+                    printf("1: \"%s\"\n", ret);
                     ret[rp++] = '\x03';
                     if (state->fg >= 0) {
                         memcpy(ret + rp, colors + (state->fg * 3), 2);
+                        printf("2: \"%s\"\n", ret);
                         rp += 2;
-                        if (state->bg >= 0) {
-                            ret[rp++] = ',';
-                            memcpy(ret + rp, colors + (state->bg * 3), 2);
-                            rp += 2;
-                        }
-                    } else if (state->bg >= 0) {
+                    }
+                    if (state->bg >= 0) {
                         ret[rp++] = ',';
                         memcpy(ret + rp, colors + (state->bg * 3), 3);
+                        printf("3: \"%s\"\n", ret);
                         rp += 2;
                     }
                 }
