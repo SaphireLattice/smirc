@@ -108,19 +108,15 @@ char* ansi_to_irc_color(char* str) {
                 code[cp++] = str[sp];
             }
             if (str[sp] == 'm') {
-                printf("%i %i\n", state->fg, state->bg);
                 if (state->fg != -1 || state->bg != -1) {
-                    printf("1: \"%s\"\n", ret);
                     ret[rp++] = '\x03';
                     if (state->fg >= 0) {
                         memcpy(ret + rp, colors + (state->fg * 3), 2);
-                        printf("2: \"%s\"\n", ret);
                         rp += 2;
                     }
                     if (state->bg >= 0) {
                         ret[rp++] = ',';
                         memcpy(ret + rp, colors + (state->bg * 3), 3);
-                        printf("3: \"%s\"\n", ret);
                         rp += 2;
                     }
                 }

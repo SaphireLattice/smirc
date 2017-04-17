@@ -192,10 +192,9 @@ void* mud_connect(void* arg) {
                         else
                             mcp_parse(mud);
                     else
+                        printf(" > %s", mud->line_buffer);
 #ifndef STANDALONE_MUD
                         send_line_irc(mud->line_buffer);
-#else
-                        printf(" > %s", mud->line_buffer);
 #endif
                     mud->line_length = 0;
                     bzero(mud->line_buffer, 1024);
