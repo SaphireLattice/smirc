@@ -135,11 +135,8 @@ void* client_callback(void* arg) {
             printf("Nick: %s\n", cinfo->nick);
             free(first);
         }
-
-        for (int msg = 1; msg <= (int) sanitized[0][0]; msg++) {
-            free(sanitized[msg]);
-        }
         free(sanitized[0]);
+        free(sanitized[1]);
         free(sanitized);
         memset(client_message, 0, sizeof(char) * 2048);
     }
