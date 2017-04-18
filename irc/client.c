@@ -71,7 +71,8 @@ void* client_callback(void* arg) {
     struct client* cinfo = (struct client*) arg;
     long read_size;
     char* client_message = calloc(sizeof(char), 2048);
-    bzero(client_message, sizeof(char) * 2048);
+    memset(client_message, 0, sizeof(char) * 2048);
+
     //Receive a message from client
     while( (read_size = recv(cinfo->socket, client_message, 2048, 0)) > 0 ) {
         char** sanitized = sanitize(client_message);
@@ -135,10 +136,12 @@ void* client_callback(void* arg) {
             free(first);
         }
 
+        for (int msg = 1; msg <= (int) sanitized[0][0]; msg++) {
+            free(sanitized[msg]);
+        }
         free(sanitized[0]);
-        free(sanitized[1]);
         free(sanitized);
-        bzero(client_message, sizeof(char) * 2048);
+        memset(client_message, 0, sizeof(char) * 2048);
     }
     free(client_message);
 
