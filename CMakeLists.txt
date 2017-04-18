@@ -15,6 +15,7 @@ set(MUD_SOURCES
         mud/client.c
         mud/telnet.c
         mud/mcp.c
+        random.c
         ssl.c)
 set(SMIRC
         main.c

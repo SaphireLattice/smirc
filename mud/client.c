@@ -42,7 +42,7 @@ void send_line_irc(char* line) {
     if (clients != 0)
         for(int i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i] != 0) {
-                printf("Sending to %i", i);
+                printf("%i<", i);
                 char* cat = calloc(sizeof(char), strlen(irc_line) + 9);
                 strcpy(cat, "#smirc :");
                 strcat(cat, irc_line);
@@ -50,8 +50,6 @@ void send_line_irc(char* line) {
                 free(cat);
             }
         }
-    fputs("M>", stdout);
-    fputs(irc_line, stdout);
     free(irc_line);
 }
 #endif
@@ -154,7 +152,7 @@ void* mud_connect(void* arg) {
         buf[2] = telnet_protocols[p];
         mud_write(mud, buf , 3);
     }
-
+    free(buf);
 
     printf("Entering read loop...\n");
     while ( (n = mud_read(mud)) > 0) {
@@ -191,11 +189,12 @@ void* mud_connect(void* arg) {
                             mcp_first(mud);
                         else
                             mcp_parse(mud);
-                    else
-                        printf(" > %s", mud->line_buffer);
+                    else if (mud->line_length > 0) {
+                        printf("M> %s", mud->line_buffer);
 #ifndef STANDALONE_MUD
                         send_line_irc(mud->line_buffer);
 #endif
+                    }
                     mud->line_length = 0;
                     bzero(mud->line_buffer, 1024);
                     break;

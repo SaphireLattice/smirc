@@ -3,6 +3,10 @@
 
 #include <openssl/ossl_typ.h>
 
+struct minfo;
+
+#include "mcp.h"
+
 struct minfo {
   int id;
   char* name;
