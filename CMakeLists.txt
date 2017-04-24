@@ -7,7 +7,9 @@ set(CMAKE_C_STANDARD 11)
 find_package(OpenSSL REQUIRED)
 
 set(COMMON_SOURCES
-        itoa.c)
+        itoa.c
+        config.c
+        config.h)
 set(IRC_SOURCES
         irc/server.c
         irc/client.c)
@@ -19,6 +21,7 @@ set(MUD_SOURCES
         ssl.c)
 set(SMIRC
         main.c
+        main.h
         ${IRC_SOURCES}
         ${MUD_SOURCES}
         ${COMMON_SOURCES})
@@ -33,11 +36,12 @@ add_executable(colortest
         mud/telnet.c
         ${COMMON_SOURCES})
 
-add_executable(mudtest
-        mud/main.c
-        ${MUD_SOURCES}
-        ${COMMON_SOURCES})
-target_compile_definitions(mudtest PRIVATE STANDALONE_MUD)
-target_link_libraries(mudtest
-        pthread
-        ${OPENSSL_LIBRARIES})
+#add_executable(mudtest
+#        mud/main.c
+#        ${MUD_SOURCES}
+#        ${COMMON_SOURCES})
+
+#target_compile_definitions(mudtest PRIVATE STANDALONE_MUD)
+#target_link_libraries(mudtest
+#        pthread
+#        ${OPENSSL_LIBRARIES})

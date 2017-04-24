@@ -17,34 +17,32 @@
 # include "../irc/server.h"
 #endif
 
-struct minfo* mud;
-char** irc_buffer;
-int irc_buffer_lines;
-
-char** get_line_buffer() {
-    return irc_buffer;
+char** get_line_buffer(struct minfo* mud) {
+    return mud->irc_buffer;
 }
 
 #ifndef STANDALONE_MUD
-void send_line_irc(char* line) {
-    char* irc_line = ansi_to_irc_color(line);
-    irc_buffer_lines++;
-    if (irc_buffer_lines > 127) {
-        free(irc_buffer[0]);
-        memcpy(irc_buffer, irc_buffer + 1, sizeof(char *) * 126);
-        bzero(irc_buffer + 125, sizeof(char* ) * 2);
-        irc_buffer_lines--;
+void send_line_irc(struct minfo* mud) {
+    char* irc_line = ansi_to_irc_color(mud->user_buffer);
+    mud->irc_length++;
+    if (mud->irc_length > (MUD_MAX_BUFFER - 1)) {
+        free(mud->irc_buffer[0]);
+        memcpy(mud->irc_buffer, mud->irc_buffer + 1, sizeof(char *) * (MUD_MAX_BUFFER - 2));
+        bzero(mud->irc_buffer + (MUD_MAX_BUFFER - 3), sizeof(char* ) * 2);
+        mud->irc_length--;
     }
-    irc_buffer[irc_buffer_lines] = calloc(sizeof(char), strlen(irc_line) + 1);
-    bzero(irc_buffer[irc_buffer_lines], strlen(irc_line) + 1);
-    strcpy(irc_buffer[irc_buffer_lines], irc_line);
-    struct client** clients = get_clients();
+    mud->irc_buffer[mud->irc_length] = calloc(sizeof(char), strlen(irc_line) + 1);
+    bzero(mud->irc_buffer[mud->irc_length], strlen(irc_line) + 1);
+    strcpy(mud->irc_buffer[mud->irc_length], irc_line);
+    struct client** clients = mud->ircserver->clients;
     if (clients != 0)
         for(int i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i] != 0) {
                 printf("%i<", i);
-                char* cat = calloc(sizeof(char), strlen(irc_line) + 9);
-                strcpy(cat, "#smirc :");
+                char* cat = calloc(sizeof(char), strlen(irc_line) + strlen(mud->name) + 4);
+                strcpy(cat, "#");
+                strcat(cat, mud->name);
+                strcat(cat, " :");
                 strcat(cat, irc_line);
                 server_send(clients[i], ">", "PRIVMSG", cat);
                 free(cat);
@@ -54,7 +52,7 @@ void send_line_irc(char* line) {
 }
 #endif
 
-void send_line_mud(char* line) {
+void send_line_mud(struct minfo* mud, char* line) {
     fputs("M<", stdout);
     fputs(line, stdout);
     fputs("\n", stdout);
@@ -71,27 +69,31 @@ int mud_write(struct minfo* mud, char* buffer, int length) {
     return status;
 }
 
-int mud_read(struct minfo* mud_l) {
+int mud_read(struct minfo* mud) {
     int status;
-    if (mud_l->use_ssl == 1)
-        status = SSL_read(mud_l->ssl, mud_l->read_buffer, sizeof(mud_l->read_buffer)-1);
+    if (mud->use_ssl == 1)
+        status = SSL_read(mud->ssl, mud->read_buffer, sizeof(mud->read_buffer)-1);
     else
-        status = (int) read(mud_l->socket, mud_l->read_buffer, sizeof(mud_l->read_buffer)-1);
+        status = (int) read(mud->socket, mud->read_buffer, sizeof(mud->read_buffer)-1);
     return status;
 }
 
 void* mud_connect(void* arg) {
-    mud = (struct minfo*) arg;
+    struct minfo* mud = (struct minfo*) arg;
+    printf("M> Starting thread ");
 
-    irc_buffer = calloc(sizeof(char *), 128);
-    memset(irc_buffer, 0, 128);
-    irc_buffer_lines = -1;
+    mud->irc_buffer = calloc(sizeof(char *), MUD_MAX_BUFFER);
+    memset(mud->irc_buffer, 0, MUD_MAX_BUFFER);
+    mud->irc_length = -1;
     ssize_t n = 0;
     mud->line_length = 0;
+    mud->user_length = 0;
     mud->read_buffer = calloc(sizeof(char), 1024);
     mud->line_buffer = calloc(sizeof(char), 1024);
+    mud->user_buffer = calloc(sizeof(char), 1024);
     memset(mud->read_buffer, 0, 1024);
     memset(mud->line_buffer, 0, 1024);
+    memset(mud->user_buffer, 0, 1024);
 
     struct sockaddr_in serv_addr;
 
@@ -145,7 +147,7 @@ void* mud_connect(void* arg) {
     }
     char* buf = calloc(sizeof(char), 3);
     buf[0] = IAC;
-    buf[1] = WILL;
+    buf[1] = DO;
     char* telnet_protocols = get_protocols();
     for (int p = 0; telnet_protocols[p] != 0; p++) {
         printf("Negotiating %X\n", (unsigned char) telnet_protocols[p]);
@@ -157,46 +159,59 @@ void* mud_connect(void* arg) {
     printf("Entering read loop...\n");
     while ( (n = mud_read(mud)) > 0) {
         mud->read_buffer[n] = 0;
+        /*printf("\n");//--------\nM> RAW: \"%s\"\n--------\n", mud->read_buffer);
+        for (int i = 0; i < n; i++)
+            printf("%X ", (unsigned char) mud->read_buffer[i]);
+        printf("\n--------\n");*/
 
         for (int i = 0; mud->read_buffer[i] != 0; i++) {
             switch(mud->read_buffer[i]) {
-                case IAC:
-                    printf("T> IAC ");
-                    char next = mud->read_buffer[++i];
-                    char *cmd = ttoa((unsigned int) next);
-                    printf("%s ", cmd);
-                    free(cmd);
-                    if (next == WILL || next == WONT || next == DO || next == DONT) {
-                        char option = mud->read_buffer[++i];
-                        char *opt = ttoa((unsigned int) option);
-                        printf("%s", opt);
-                        free(opt);
-                    } else if (next == SB) {
-                        char sub;
-                        do {
-                            sub = mud->read_buffer[++i];
-                            printf("\nSub: %X (%i)", (unsigned char) sub, (unsigned char) sub);
-                        } while (sub != IAC && mud->read_buffer[i + 1] != SE);
-                    }
-                    printf("\n");
-                    break;
                 case '\r':
                     break;
                 case '\n':
-                    mud->line_buffer[mud->line_length] = mud->read_buffer[i];
-                    if (mud->line_length > 3 && memcmp(mud->line_buffer, "#$#", 3) == 0)
+                    for (int j = 0; mud->line_buffer[j] != 0; j++) {
+                        if (mud->line_buffer[j] == IAC) {
+                            printf("T> IAC ");
+                            char next = mud->line_buffer[++j];
+                            char *cmd = ttoa((unsigned int) next);
+                            printf("%s ", cmd);
+                            free(cmd);
+                            if (next == WILL || next == WONT || next == DO || next == DONT) {
+                                char option = mud->line_buffer[++j];
+                                char *opt = ttoa((unsigned int) option);
+                                printf("%s", opt);
+                                free(opt);
+                            } else if (next == SB) {
+                                char sub;
+                                do {
+                                    sub = mud->line_buffer[++j];
+                                    printf("\nSub: %X (%i)", (unsigned char) sub, (unsigned char) sub);
+                                } while (sub != IAC && mud->line_buffer[j + 1] != SE);
+                                j+=2;
+                            }
+                            printf("\n");
+                            break;
+                        } else
+                            mud->user_buffer[mud->user_length++] = mud->line_buffer[j];
+                    }
+                    mud->line_length = 0;
+                    bzero(mud->line_buffer, 1024);
+
+                    mud->user_buffer[mud->user_length++] = '\r';
+                    mud->user_buffer[mud->user_length] = mud->read_buffer[i];
+                    if (mud->user_length > 3 && memcmp(mud->user_buffer, "#$#", 3) == 0)
                         if(mud->mcp_state == 0)
                             mcp_first(mud);
                         else
                             mcp_parse(mud);
-                    else if (mud->line_length > 0) {
-                        printf("M> %s", mud->line_buffer);
+                    else if (mud->user_length > 0) {
+                        printf("M> %s", mud->user_buffer);
 #ifndef STANDALONE_MUD
-                        send_line_irc(mud->line_buffer);
+                        send_line_irc(mud);
 #endif
                     }
-                    mud->line_length = 0;
-                    bzero(mud->line_buffer, 1024);
+                    mud->user_length = 0;
+                    bzero(mud->user_buffer, 1024);
                     break;
                 default:
                     mud->line_buffer[mud->line_length++] = mud->read_buffer[i];

@@ -22,7 +22,7 @@ void mcp_first(struct minfo* mud) {
 
     mud->mcp_state->mud = mud;
 
-    struct mcp_msg* msg = mcp_decompose(mud->line_buffer);
+    struct mcp_msg* msg = mcp_decompose(mud->user_buffer);
 
     struct mcp_data* data;
     if ((data = mcp_has_data(msg, "version")) != 0) {
@@ -47,7 +47,7 @@ void mcp_first(struct minfo* mud) {
 
 void mcp_parse(struct minfo* mud) {
     //printf("parse\n");
-    struct mcp_msg* msg = mcp_decompose(mud->line_buffer);
+    struct mcp_msg* msg = mcp_decompose(mud->user_buffer);
     msg->state = mud->mcp_state;
     mcp_free(msg);
 }
@@ -146,7 +146,7 @@ struct mcp_msg* mcp_decompose(char* str) {
                 // Message name
                 if (((msg_state & SKIP) == 0) && msg_state == NEEDNAME) {
                     fputs("\x1b[33m", stdout);
-                    msg->msg_name = calloc(sizeof(char), ptr - start);
+                    msg->msg_name = calloc(sizeof(char), ptr - start + 1);
                     memset(msg->msg_name, 0, ptr - start);
                     memcpy(msg->msg_name, word, ptr - start);
                     mcp_low_orig(msg->msg_name);

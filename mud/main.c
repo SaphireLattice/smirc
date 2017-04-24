@@ -17,7 +17,7 @@ int main(int argc, char** args) {
     struct minfo *mud = malloc(sizeof(struct minfo));
     mud->address = args[1];
     mud->port = atoi(args[2]);
-    mud->use_ssl = 1;
+    mud->use_ssl = 0;
 
     printf("%s, %i\n", mud->address, mud->port);
     err = pthread_create(&thread, NULL, &mud_connect, mud);

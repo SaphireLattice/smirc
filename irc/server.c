@@ -1,33 +1,39 @@
-#include <error.h>
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include "server.h"
 #include "../itoa.h"
+#include "../mud/client.h"
 
-void server_loop() {
-    int socket_desc, c;
-    struct sockaddr_in server, client;
+void* server_loop(void* arg) {
+    struct irc_server* server = (struct irc_server*) arg;
     int iSetOption = 1;
-    int* client_sock = malloc(sizeof(int));
     struct client** clients = calloc(sizeof(struct client*), MAX_CLIENTS);
     for (int i = 0; i < MAX_CLIENTS; i++)
         clients[i] = 0;
 
     //Create socket
-    socket_desc = socket(AF_INET , SOCK_STREAM , IPPROTO_TCP);
-    if (socket_desc == -1)
+    server->socket.socket_description = socket(AF_INET , SOCK_STREAM , IPPROTO_TCP);
+    if (server->socket.socket_description == -1)
     {
         printf("Could not create socket");
     }
     puts("Socket created");
-    setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption,
+
+    setsockopt(server->socket.socket_description, SOL_SOCKET, SO_REUSEADDR, (char*)&iSetOption,
                sizeof(iSetOption));
 
     //Prepare the sockaddr_in structure
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons( 8989 );
+    server->socket.addr.sin_family = AF_INET;
+    server->socket.addr.sin_addr.s_addr = INADDR_ANY;
+    server->socket.addr.sin_port = htons( 8989 );
 
     //Bind
-    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) {
+    if( bind(server->socket.socket_description,(struct sockaddr *)&server->socket.addr , sizeof(server->socket.addr)) < 0) {
         //print the error message
         perror("Bind failed. Error");
         pthread_exit(0);
@@ -35,109 +41,59 @@ void server_loop() {
     puts("Bind done.");
 
     //Listen
-    listen(socket_desc , 3);
+    listen(server->socket.socket_description, 3);
 
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
-    c = sizeof(struct sockaddr_in);
+    server->socket.desc_size = sizeof(struct sockaddr_in);
 
+    //Init loop vars
+    int* client_sock = malloc(sizeof(int));
+    struct sockaddr_in client;
     //accept connection from an incoming client
     while (1) {
         printf("S_\n");
-        *client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c);
+        *client_sock = accept(server->socket.socket_description, (struct sockaddr *)&client, (socklen_t*)&server->socket.desc_size);
         if (*client_sock < 0) {
             perror("Accept failed");
             break;
         }
         puts("Connection accepted");
-        struct client* cinfo = add_client(clients);
-        int sock = *client_sock;
-        cinfo->socket = sock;
-        printf("SC\n");
-        int err = pthread_create(&(cinfo->cl_thread), NULL, &client_callback, cinfo);
-        printf("SP\n");
+        struct client* cinfo = add_client(server);
+        if (cinfo != 0) {
+            int sock = *client_sock;
+            cinfo->socket = sock;
+            printf("Creating client thread..\n");
+            int err = pthread_create(&(cinfo->cl_thread), NULL, &client_callback, cinfo);
 
-        if (err != 0)
-            printf("Can't create thread :[%s]", strerror(err));
-        else
-            printf("Thread %lu created successfully\n", cinfo->cl_thread);
-        printf("SE\n");
+            if (err != 0)
+                printf("Can't create thread: [%s]", strerror(err));
+            else
+                printf("Thread %lu created successfully\n", cinfo->cl_thread);
+            printf("SE\n");
+        } else {
+            printf("Error: out of client slots!\n");
+            close(*client_sock);
+        }
     }
     pthread_exit(0);
 }
 
-const char* server_name = "localhost\0";
-
-void server_send_plain(struct client* clt, char* command, char* message) {
-    ssize_t written = 0;
-    written += write(clt->socket, command, strlen(command) * sizeof(char));
-    written += write(clt->socket, " ", 1 * sizeof(char));
-    written += write(clt->socket, message, strlen(message) * sizeof(char));
-
-    written += write(clt->socket, "\r\n", 2 * sizeof(char));
-    if (written == 0)
-        error(-1, 1, "well fuck");
-}
-
-void server_send_numeric(struct client* clt, int number, char *message) {
-    ssize_t written = 0;
-    written += write(clt->socket, ":", 1 * sizeof(char));
-    written += write(clt->socket, server_name, strlen(server_name) * sizeof(char));
-    written += write(clt->socket, " ", 1 * sizeof(char));
-
-    if (number < 100) {
-        if (number < 10)
-            written += write(clt->socket, "0", 1 * sizeof(char));
-        written += write(clt->socket, "0", 1 * sizeof(char));
+void add_mud(struct minfo* mud) {
+    struct irc_mud** next = &(mud->ircserver->mud);
+    while (*next != 0) {
+        next = &((*next)->next);
     }
-    char* number_s = malloc(sizeof(char) * 3);
-    itoa(number, number_s, 10);
-    written += write(clt->socket, number_s, strlen(number_s) * sizeof(char));
-    free(number_s);
-
-    written += write(clt->socket, " ", 1 * sizeof(char));
-    written += write(clt->socket, clt->nick, strlen(clt->nick) * sizeof(char));
-
-    written += write(clt->socket, " ", 1 * sizeof(char));
-    written += write(clt->socket, message, strlen(message) * sizeof(char));
-
-    written += write(clt->socket, "\r\n", 2 * sizeof(char));
-    if (written == 0)
-        error(-1, 1, "well fuck");
+    *next = malloc(sizeof(struct irc_mud));
+    (*next)->mud = mud;
 }
 
-void server_send(struct client* clt, char* who, char* command, char *message) {
-    ssize_t written = 0;
-    written += write(clt->socket, ":", 1 * sizeof(char));
-    written += write(clt->socket, who, strlen(who) * sizeof(char));
-    written += write(clt->socket, " ", 1 * sizeof(char));
-    written += write(clt->socket, command, strlen(command) * sizeof(char));
-    written += write(clt->socket, " ", 1 * sizeof(char));
-    written += write(clt->socket, message, strlen(message) * sizeof(char));
-
-    written += write(clt->socket, "\r\n", 2 * sizeof(char));
-    if (written == 0)
-        error(-1, 1, "well fuck");
-}
-
-void server_send_client(struct client* clt, char* command, char* message) {
-    size_t len = 0;
-    len += strlen(clt->nick);
-    len += strlen(clt->nick);
-    len += strlen(server_name);
-    len += 3;
-    char* who = calloc(sizeof(char), len);
-    strcat(who, clt->nick);
-    strcat(who, "!");
-    strcat(who, clt->nick);
-    strcat(who, "@");
-    strcat(who, server_name);
-
-    server_send(clt, who, command, message);
-
-    free(who);
-}
-
-void server_join_channel(struct client* clt, char *channame) {
-    server_send_client(clt, "JOIN", channame);
+struct minfo* get_mud(struct irc_server* server, char* channel) {
+    struct irc_mud** next = &(server->mud);
+    while (*next != 0) {
+        if (strcmp((*next)->mud->name, channel +1) == 0)
+            return (*next)->mud;
+        next = &((*next)->next);
+    }
+    return 0;
 }
