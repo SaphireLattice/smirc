@@ -187,7 +187,6 @@ void* client_callback(void* arg) {
                             cinfo->server->debug = 0;
                         else
                             cinfo->server->debug = 1;
-                        break;
                     }
                 } else {
                     struct minfo* mud = get_mud(cinfo->server, word[2]);
