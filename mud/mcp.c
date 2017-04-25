@@ -14,13 +14,13 @@ void mcp_first(struct minfo* mud) {
     printf("P> Starting MCP negotiation\n");
     mud->mcp_state = malloc(sizeof(struct mcp_state));
 
-
     char* key;
     key = calloc(sizeof(char), 16);
     key[15] = 0;
     rand_str(key, 15);
 
     mud->mcp_state->mud = mud;
+    mud->mcp_state->key = 0;
 
     struct mcp_msg* msg = mcp_decompose(mud->user_buffer);
 
@@ -65,9 +65,9 @@ char* mcp_compose(struct mcp_msg* mcp_msg) {
     mptr += mcp_str_copy(mptr, "#$#");
 
     mptr += mcp_str_copy(mptr, mcp_msg->msg_name);
-    *(mptr++) = ' ';
 
     if (mcp_msg->state->key != 0) {
+        *(mptr++) = ' ';
         mptr += mcp_str_copy(mptr, mcp_msg->key);
     }
 

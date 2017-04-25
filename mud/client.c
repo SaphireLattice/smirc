@@ -99,6 +99,8 @@ void* mud_connect(void* arg) {
     memset(mud->line_buffer, 0, 1025);
     memset(mud->user_buffer, 0, 1025);
 
+    mud->mcp_state = 0;
+
     struct sockaddr_in serv_addr;
 
     if((mud->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
