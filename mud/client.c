@@ -21,6 +21,23 @@ char** get_line_buffer(struct minfo* mud) {
     return mud->irc_buffer;
 }
 
+void send_msg_irc(struct minfo* mud, char* msg) {
+    struct client** clients = mud->ircserver->clients;
+    if (clients != 0)
+        for(int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i] != 0) {
+                printf("%i<", i);
+                char* cat = calloc(sizeof(char), strlen(msg) + strlen(mud->name) + 4);
+                strcpy(cat, "#");
+                strcat(cat, mud->name);
+                strcat(cat, " :");
+                strcat(cat, msg);
+                server_send(clients[i], ">", "PRIVMSG", cat);
+                free(cat);
+            }
+        }
+}
+
 void send_line_irc(struct minfo* mud) {
     char* irc_line = ansi_to_irc_color(mud->user_buffer);
     mud->irc_length++;
@@ -33,20 +50,7 @@ void send_line_irc(struct minfo* mud) {
     mud->irc_buffer[mud->irc_length] = calloc(sizeof(char), strlen(irc_line) + 1);
     bzero(mud->irc_buffer[mud->irc_length], strlen(irc_line) + 1);
     strcpy(mud->irc_buffer[mud->irc_length], irc_line);
-    struct client** clients = mud->ircserver->clients;
-    if (clients != 0)
-        for(int i = 0; i < MAX_CLIENTS; i++) {
-            if (clients[i] != 0) {
-                printf("%i<", i);
-                char* cat = calloc(sizeof(char), strlen(irc_line) + strlen(mud->name) + 4);
-                strcpy(cat, "#");
-                strcat(cat, mud->name);
-                strcat(cat, " :");
-                strcat(cat, irc_line);
-                server_send(clients[i], ">", "PRIVMSG", cat);
-                free(cat);
-            }
-        }
+    send_msg_irc(mud, irc_line);
     free(irc_line);
 }
 
@@ -79,6 +83,7 @@ int mud_read(struct minfo* mud) {
 void* mud_connect(void* arg) {
     struct minfo* mud = (struct minfo*) arg;
     printf("M> Starting thread ");
+    send_msg_irc(mud, "!! Starting connection thread");
 
     mud->socket = -2;
     mud->irc_buffer = calloc(sizeof(char *), MUD_IRC_BUFFER);
@@ -99,6 +104,7 @@ void* mud_connect(void* arg) {
     if((mud->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("\nError: Could not create socket \n");
+        send_msg_irc(mud, "!! Error: Could not create socket");
         free_mud(mud);
         return 0;
     }
@@ -118,7 +124,8 @@ void* mud_connect(void* arg) {
 
     if( connect(mud->socket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
-        printf("\n Error : Connect Failed \n");
+        printf("\nError: Connect Failed \n");
+        send_msg_irc(mud, "!! Error: Conection failed");
         free_mud(mud);
         return 0;
     }
@@ -144,10 +151,12 @@ void* mud_connect(void* arg) {
         if (SSL_connect(mud->ssl) == -1) {
             printf(" FAIL\n");
             ERR_print_errors_fp(stderr);
+            send_msg_irc(mud, "!! Error: SSL Connection failed");
             free_mud(mud);
             return 0;
         }
         printf("\nConnected with %s encryption\n", SSL_get_cipher(mud->ssl));
+        send_msg_irc(mud, "!! SSL Connection established");
         ShowCerts(mud->ssl);
     }
     char* buf = calloc(sizeof(char), 3);
@@ -173,10 +182,12 @@ void* mud_connect(void* arg) {
     }
 
     if(n == 0) {
+        send_msg_irc(mud, "!! Connection closed");
         printf("\nConnection closed\n");
     }
 
     if(n < 0) {
+        send_msg_irc(mud, "!! Read error");
         perror("Read error");
     }
 
