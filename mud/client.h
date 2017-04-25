@@ -3,7 +3,7 @@
 #include <openssl/ossl_typ.h>
 #include <pthread.h>
 
-#define MUD_MAX_BUFFER 128
+#define MUD_IRC_BUFFER 128
 
 struct minfo {
   int id;
@@ -38,6 +38,11 @@ int mud_write(struct minfo* mud, char* buffer, int length);
 int mud_read(struct minfo* mud);
 
 void* mud_connect(void* arg);
+void process_buffer(struct minfo* mud);
 
+void free_mud(struct minfo *mud);
+void add_mud(struct minfo* mud);
+struct minfo* get_mud(struct irc_server* server, char* channel);
+void del_mud(struct minfo* mud);
 
 #endif //SMIRC_MUD_CLIENT_H

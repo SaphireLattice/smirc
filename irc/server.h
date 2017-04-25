@@ -17,12 +17,12 @@ struct irc_server {
   struct client** clients;
   struct irc_socket socket;
   struct irc_mud* mud;
+
+  int debug;
 };
 
 #include "client.h"
 
 void* server_loop(void*);
-void add_mud(struct minfo* mud);
-struct minfo* get_mud(struct irc_server* server, char* channel);
 
 #endif //SMIRC_SERVER_H

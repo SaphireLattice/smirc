@@ -3,6 +3,7 @@
 
 enum {
   SE   = (char) 0xF0, // end of subnegotiation
+  NOP  = (char) 0xF1,
   SB   = (char) 0xFA, // start of subnegotiation
   WILL = (char) 0xFB,
   WONT = (char) 0xFC,

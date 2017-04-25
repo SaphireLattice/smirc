@@ -12,9 +12,8 @@
 void* server_loop(void* arg) {
     struct irc_server* server = (struct irc_server*) arg;
     int iSetOption = 1;
-    struct client** clients = calloc(sizeof(struct client*), MAX_CLIENTS);
-    for (int i = 0; i < MAX_CLIENTS; i++)
-        clients[i] = 0;
+    server->clients = calloc(sizeof(struct client*), MAX_CLIENTS + 1);
+    memset(server->clients, 0, sizeof(struct client*) * (MAX_CLIENTS + 1));
 
     //Create socket
     server->socket.socket_description = socket(AF_INET , SOCK_STREAM , IPPROTO_TCP);
@@ -76,24 +75,14 @@ void* server_loop(void* arg) {
             close(*client_sock);
         }
     }
+    free(client_sock);
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (server->clients[i] != 0)
+            rem_client(server->clients[i]);
+    }
+    free(server->clients);
+    free(server);
+
+
     pthread_exit(0);
-}
-
-void add_mud(struct minfo* mud) {
-    struct irc_mud** next = &(mud->ircserver->mud);
-    while (*next != 0) {
-        next = &((*next)->next);
-    }
-    *next = malloc(sizeof(struct irc_mud));
-    (*next)->mud = mud;
-}
-
-struct minfo* get_mud(struct irc_server* server, char* channel) {
-    struct irc_mud** next = &(server->mud);
-    while (*next != 0) {
-        if (strcmp((*next)->mud->name, channel +1) == 0)
-            return (*next)->mud;
-        next = &((*next)->next);
-    }
-    return 0;
 }

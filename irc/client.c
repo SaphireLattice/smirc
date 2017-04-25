@@ -62,6 +62,7 @@ void rem_client(struct client* client) {
 }
 
 void* client_callback(void* arg) {
+    int quit = 0;
     struct client* cinfo = (struct client*) arg;
     long read_size;
     char* client_message = calloc(sizeof(char), 2048);
@@ -69,7 +70,7 @@ void* client_callback(void* arg) {
     char **word = calloc(sizeof(char *), 256);
 
     //Receive a message from client
-    while( (read_size = recv(cinfo->socket, client_message, 2048, 0)) > 0 ) {
+    while( (quit != 1) && (read_size = recv(cinfo->socket, client_message, 2048, 0)) > 0 ) {
         char** sanitized = sanitize(client_message);
         for (int msg = 1; msg <= (int) sanitized[0][0]; msg++) {
             printf("%i> %s\n", cinfo->id, sanitized[msg]);
@@ -132,10 +133,10 @@ void* client_callback(void* arg) {
             if (strcmp(word[0], "PRIVMSG") == 0) {
                 if (strcmp(word[2], "#smirc") == 0) {
                     if(strcmp(word[4], ":connect") == 0) {
-                        struct minfo* mud = malloc(sizeof(struct minfo));
                         if (words < 8)
-                            NULL;
+                            printf("I> Invalid connect command!\n");
                         else {
+                            struct minfo* mud = malloc(sizeof(struct minfo));
                             mud->ircserver = cinfo->server;
                             mud->name = strdup(word[6]);
 
@@ -158,14 +159,35 @@ void* client_callback(void* arg) {
                             } else
                                 mud->port = 23;
                             add_mud(mud);
+                            pthread_create(&mud->thread, NULL, &mud_connect, mud);
                         }
-                        pthread_create(&mud->thread, NULL, &mud_connect, mud);
                     }
                     if(strcmp(word[4], ":disconnect") == 0) {
-
+                        if (words < 6)
+                            printf("I> Invalid connect command!\n");
+                        else {
+                            struct minfo *mud = get_mud(cinfo->server, word[6]);
+                            if (mud != 0) {
+                                shutdown(mud->socket, SHUT_RD);
+                                del_mud(mud);
+                            } else
+                                printf("I> No such MUD connect!\n");
+                        }
                     }
                     if(strcmp(word[4], ":quit") == 0) {
-
+                        quit = 1;
+                        for(int i = 0; (i < 256) && (word[i] != 0); i+=2) {
+                            free(word[i]);
+                        }
+                        shutdown(cinfo->server->socket.socket_description, SHUT_RDWR);
+                        break;
+                    }
+                    if(strcmp(word[4], ":debug") == 0) {
+                        if (words == 8 && strcasecmp(word[6], "off"))
+                            cinfo->server->debug = 0;
+                        else
+                            cinfo->server->debug = 1;
+                        break;
                     }
                 } else {
                     struct minfo* mud = get_mud(cinfo->server, word[2]);
@@ -177,10 +199,12 @@ void* client_callback(void* arg) {
             if (strcmp(word[0], "PING") == 0) {
                 server_send_plain(cinfo, "PONG", word[2]);
             }
-            printf("Nick: %s\n", cinfo->nick);
+            if (cinfo->server->debug)
+                printf("I> Nick: %s\n", cinfo->nick);
 
             for(int i = 0; (i < 256) && (word[i] != 0); i+=2) {
-                printf("%i: %s\n", i/2, word[i]);
+                if (cinfo->server->debug)
+                    printf("%i: %s\n", i/2, word[i]);
                 free(word[i]);
             }
         }

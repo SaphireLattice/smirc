@@ -25,14 +25,14 @@ char* ttoa(unsigned int code) {
     char* result = calloc(sizeof(char), 5);
     memset(result, 0, 5);
     switch(code) {
-        case 0xFF:
+        case IAC:
             memcpy(result, "IAC", 4);
             break;
         case WONT:
-            memcpy(result, "WILL", 5);
+            memcpy(result, "WONT", 5);
             break;
         case WILL:
-            memcpy(result, "WONT", 5);
+            memcpy(result, "WILL", 5);
             break;
         case DO:
             memcpy(result, "DO", 3);
@@ -48,6 +48,9 @@ char* ttoa(unsigned int code) {
             break;
         case GMCP:
             memcpy(result, "GMCP", 5);
+            break;
+        case NOP:
+            memcpy(result, "NOP", 4);
             break;
         default: {
             int i = 0;
