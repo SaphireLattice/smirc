@@ -21,7 +21,6 @@ char** get_line_buffer(struct minfo* mud) {
     return mud->irc_buffer;
 }
 
-#ifndef STANDALONE_MUD
 void send_line_irc(struct minfo* mud) {
     char* irc_line = ansi_to_irc_color(mud->user_buffer);
     mud->irc_length++;
@@ -50,7 +49,6 @@ void send_line_irc(struct minfo* mud) {
         }
     free(irc_line);
 }
-#endif
 
 void send_line_mud(struct minfo* mud, char* line) {
     fputs("M<", stdout);
@@ -72,9 +70,9 @@ int mud_write(struct minfo* mud, char* buffer, int length) {
 int mud_read(struct minfo* mud) {
     int status;
     if (mud->use_ssl == 1)
-        status = SSL_read(mud->ssl, mud->read_buffer, sizeof(mud->read_buffer)-1);
+        status = SSL_read(mud->ssl, mud->read_buffer, 1024);
     else
-        status = (int) read(mud->socket, mud->read_buffer, sizeof(mud->read_buffer)-1);
+        status = (int) read(mud->socket, mud->read_buffer, 1024);
     return status;
 }
 
@@ -89,12 +87,12 @@ void* mud_connect(void* arg) {
     ssize_t n = 0;
     mud->line_length = 0;
     mud->user_length = 0;
-    mud->read_buffer = calloc(sizeof(char), 1024);
-    mud->line_buffer = calloc(sizeof(char), 1024);
-    mud->user_buffer = calloc(sizeof(char), 1024);
-    memset(mud->read_buffer, 0, 1024);
-    memset(mud->line_buffer, 0, 1024);
-    memset(mud->user_buffer, 0, 1024);
+    mud->read_buffer = calloc(sizeof(char), 1025);
+    mud->line_buffer = calloc(sizeof(char), 1025);
+    mud->user_buffer = calloc(sizeof(char), 1025);
+    memset(mud->read_buffer, 0, 1025);
+    memset(mud->line_buffer, 0, 1025);
+    memset(mud->user_buffer, 0, 1025);
 
     struct sockaddr_in serv_addr;
 
@@ -174,8 +172,9 @@ void* mud_connect(void* arg) {
         process_buffer(mud);
     }
 
-    if(n == 0)
+    if(n == 0) {
         printf("\nConnection closed\n");
+    }
 
     if(n < 0) {
         perror("Read error");
@@ -189,8 +188,12 @@ void* mud_connect(void* arg) {
 void process_buffer(struct minfo* mud) {
     for (int i = 0; mud->read_buffer[i] != 0; i++) {
         switch(mud->read_buffer[i]) {
-            case '\r':
-                break;
+            default:
+                if (mud->ircserver->debug)
+                    printf("M> '%c' - %X\n", mud->read_buffer[i], (unsigned char) mud->read_buffer[i]);
+                mud->line_buffer[mud->line_length++] = mud->read_buffer[i];
+                if (mud->line_length < 1022)
+                    break;
             case '\n':
                 for (int j = 0; mud->line_buffer[j] != 0; j++) {
                     if (mud->line_buffer[j] == IAC) {
@@ -238,17 +241,12 @@ void process_buffer(struct minfo* mud) {
                     }
 
                     printf("M> %s", mud->user_buffer);
-#ifndef STANDALONE_MUD
                     send_line_irc(mud);
-#endif
                 }
                 mud->user_length = 0;
                 bzero(mud->user_buffer, 1024);
                 break;
-            default:
-                if (mud->ircserver->debug)
-                    printf("M> '%c' - %X\n", mud->read_buffer[i], (unsigned char) mud->read_buffer[i]);
-                mud->line_buffer[mud->line_length++] = mud->read_buffer[i];
+            case '\r':
                 break;
         }
     }
