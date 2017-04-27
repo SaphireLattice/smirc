@@ -11,6 +11,7 @@
 
 void* server_loop(void* arg) {
     struct irc_server* server = (struct irc_server*) arg;
+
     int iSetOption = 1;
     server->clients = calloc(sizeof(struct client*), MAX_CLIENTS + 1);
     memset(server->clients, 0, sizeof(struct client*) * (MAX_CLIENTS + 1));

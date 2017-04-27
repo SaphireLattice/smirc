@@ -244,9 +244,6 @@ struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
 
     fflush(fbuffer);
     char* tmp = ansi_to_irc_color(buffer);
-    printf("%p\n", (void*) msg->state->mud->ircserver);
-    printf("%p\n", (void*) msg->state->mud->name);
-    printf("%p\n", (void*) tmp);
     server_send_channel(msg->state->mud->ircserver, "mcp", msg->state->mud->name, tmp);
     free(tmp);
     fclose(fbuffer);

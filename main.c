@@ -39,8 +39,7 @@ int main(int argc, char** args) {
     memset(server, 0, sizeof(struct irc_server));
     server->name = "localhost";
     server->debug = 0;
-    printf("%s\n", server->name);
-    printf("%p\n", (void*) server);
+    server->mud = 0;
 
     server_loop(server);
     /*
