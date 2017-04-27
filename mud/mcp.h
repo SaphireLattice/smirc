@@ -35,7 +35,7 @@ void mcp_parse(struct minfo* mud);
 
 void mcp_send(struct mcp_msg* mcp_msg);
 char* mcp_compose(struct mcp_msg* mcp_msg);
-struct mcp_msg* mcp_decompose(char* str);
+struct mcp_msg* mcp_decompose(struct mcp_state*, char* str);
 
 struct mcp_msg* mcp_new_msg();
 struct mcp_data_block* mcp_new_block(struct mcp_msg* msg);

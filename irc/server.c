@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include "server.h"
-#include "../itoa.h"
+#include "../utils.h"
 #include "../mud/client.h"
 
 void* server_loop(void* arg) {

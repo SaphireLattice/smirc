@@ -1,7 +1,7 @@
 #include "telnet.h"
 #include "stdlib.h"
 #include "memory.h"
-#include "../itoa.h"
+#include "../utils.h"
 #include <stdio.h>
 
 const char* colors = "01,04,03,07,02,06,11,15,99,99,";

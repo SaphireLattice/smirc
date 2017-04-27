@@ -7,7 +7,9 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "mcp.h"
-#include "../random.h"
+#include "../irc/client.h"
+#include "telnet.h"
+#include "../utils.h"
 
 void mcp_first(struct minfo* mud) {
     srand((unsigned int) urandom());
@@ -22,7 +24,7 @@ void mcp_first(struct minfo* mud) {
     mud->mcp_state->mud = mud;
     mud->mcp_state->key = 0;
 
-    struct mcp_msg* msg = mcp_decompose(mud->user_buffer);
+    struct mcp_msg* msg = mcp_decompose(mud->mcp_state, mud->user_buffer);
 
     struct mcp_data* data;
     if ((data = mcp_has_data(msg, "version")) != 0) {
@@ -30,11 +32,9 @@ void mcp_first(struct minfo* mud) {
         struct mcp_msg* reply = mcp_new_msg();
         reply->state = mud->mcp_state;
         reply->msg_name = strdup("mcp");
-        //authentication-key: 18972163558 version: 1.0 to: 2.1
         mcp_add_data(reply, "authentication-key", key);
         mcp_add_data(reply, "version", "2.1");
         mcp_add_data(reply, "to", "2.1");
-        //mud_write(mud, "#$#mcp authentication-key: \"QoMNUckLhytCmvX\" version: \"2.1\" to: \"2.1\"\r\n", 71);
         mcp_send(reply);
         mcp_free(reply);
     } else
@@ -47,7 +47,7 @@ void mcp_first(struct minfo* mud) {
 
 void mcp_parse(struct minfo* mud) {
     //printf("parse\n");
-    struct mcp_msg* msg = mcp_decompose(mud->user_buffer);
+    struct mcp_msg* msg = mcp_decompose(mud->mcp_state, mud->user_buffer);
     msg->state = mud->mcp_state;
     mcp_free(msg);
 }
@@ -89,15 +89,22 @@ char* mcp_compose(struct mcp_msg* mcp_msg) {
     *(mptr++) = '\n';
     *(mptr++) = '\0';
     printf("P< %s", msg);
+    char* tmp = calloc(sizeof(char), 515);
+    memset(tmp, 0, sizeof(char) * 515);
+    strcat(tmp, "P< ");
+    strcat(tmp, msg);
+    server_send_channel(mcp_msg->state->mud->ircserver, "mcp", mcp_msg->state->mud->name, msg);
+    free(msg);
     return msg;
 }
 
 // <message-start> ::= <message-name> <space> <auth-key> <keyvals>
 // <message-multiline-continue> ::= '*' <space> <datatag> <space> <simple-key> ':' ' ' <line>
 // <message-multiline-end> ::= ':' <space> <datatag>
-struct mcp_msg* mcp_decompose(char* str) {
+struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
     //printf("decompose\n");
     struct mcp_msg* msg = mcp_new_msg();
+    msg->state = state;
     char* ptr = str + 3;
 
     // Binary: escape quote initial_msg need_name
@@ -116,6 +123,8 @@ struct mcp_msg* mcp_decompose(char* str) {
     int msg_state = NEEDNAME;
 
     size_t len = strlen(str);
+    char* buffer = calloc(sizeof(char), len);
+    FILE* fbuffer = open_memstream(&buffer, &len);
     char* word = calloc(sizeof(char), len);
     char* key = calloc(sizeof(char), len);
     char* wptr = word;
@@ -124,7 +133,7 @@ struct mcp_msg* mcp_decompose(char* str) {
     memset(key, 0, len);
     memset(msg->msg_name, 0, 32);
 
-    fputs("P>", stdout);
+    fputs("P>", fbuffer);
     char* start = ptr;
     while(*ptr != 0) {
         switch (*ptr) {
@@ -145,7 +154,7 @@ struct mcp_msg* mcp_decompose(char* str) {
 
                 // Message name
                 if (((msg_state & SKIP) == 0) && msg_state == NEEDNAME) {
-                    fputs("\x1b[33m", stdout);
+                    fputs("\x1b[33m", fbuffer);
                     msg->msg_name = calloc(sizeof(char), ptr - start + 1);
                     memset(msg->msg_name, 0, ptr - start);
                     memcpy(msg->msg_name, word, ptr - start);
@@ -161,7 +170,7 @@ struct mcp_msg* mcp_decompose(char* str) {
 
                 // Auth key.
                 if (((msg_state & SKIP) == 0) && (msg_state == AUTH)) {
-                    fputs("\x1b[31m", stdout);
+                    fputs("\x1b[31m", fbuffer);
                     char* auth_key = calloc(sizeof(char), 32);
                     memset(auth_key, 0, 32);
                     memcpy(auth_key, word, ptr - start);
@@ -171,10 +180,10 @@ struct mcp_msg* mcp_decompose(char* str) {
                 }
 
                 if (((msg_state & SKIP) == 0) && (msg_state & KEY)) {
-                    fputs("\x1b[34m", stdout);
+                    fputs("\x1b[34m", fbuffer);
                     // Shouldn't happen, but won't hurt to check, also can tell about other parsing errors
                     if ((msg_state & COLON) == 0) {
-                        fputs("\n\x1b[0mP>\x1b[0;1;31m!MCP Error: no colon after key\x1b[0m\n", stdout);
+                        fputs("\x1b[0mP>\x1b[0;1;31m!MCP Error: no colon after key\x1b[0m", fbuffer);
                         return msg;
                     }
                     memset(key, 0, len);
@@ -186,7 +195,7 @@ struct mcp_msg* mcp_decompose(char* str) {
                 }
 
                 if (((msg_state & SKIP) == 0) && (msg_state & VALUE)) {
-                    fputs(":\x1b[32m", stdout);
+                    fputs(":\x1b[32m", fbuffer);
 
                     mcp_add_data(msg, key, word);
 
@@ -210,8 +219,8 @@ struct mcp_msg* mcp_decompose(char* str) {
 
                 if (msg_state & SKIP)
                     msg_state ^= SKIP;
-                fputs(" ", stdout);
-                fputs(word, stdout);
+                fputs(" ", fbuffer);
+                fputs(word, fbuffer);
                 memset(word, 0, len);
                 wptr = word;
                 break;
@@ -231,7 +240,17 @@ struct mcp_msg* mcp_decompose(char* str) {
                 ptr++;
         }
     }
-    fputs("\x1b[0m\n", stdout);
+    fputs("\x1b[0m", fbuffer);
+
+    fflush(fbuffer);
+    char* tmp = ansi_to_irc_color(buffer);
+    printf("%p\n", (void*) msg->state->mud->ircserver);
+    printf("%p\n", (void*) msg->state->mud->name);
+    printf("%p\n", (void*) tmp);
+    server_send_channel(msg->state->mud->ircserver, "mcp", msg->state->mud->name, tmp);
+    free(tmp);
+    fclose(fbuffer);
+    free(buffer);
     free(word);
     free(key);
     return msg;

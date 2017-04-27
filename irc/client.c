@@ -10,7 +10,7 @@
 #include "client.h"
 #include "server.h"
 #include "../mud/client.h"
-#include "../itoa.h"
+#include "../utils.h"
 
 char** sanitize(char* str) {
     size_t len = strlen(str);
@@ -116,6 +116,7 @@ void* client_callback(void* arg) {
                 if (cinfo->state == 0) {
                     server_send_numeric(cinfo, 1, ":sup");
                     server_join_channel(cinfo, "#smirc");
+                    server_join_channel(cinfo, "#mcp");
                     cinfo->state = 1;
                     //TODO: redo MUD buffers to actually use own buffers
                     /*
@@ -187,6 +188,33 @@ void* client_callback(void* arg) {
                             cinfo->server->debug = 0;
                         else
                             cinfo->server->debug = 1;
+                    }
+                    if(strcmp(word[4], ":list") == 0) {
+                        server_send_user_channel(cinfo, "smirc", "smirc", "Connected to:");
+                        struct irc_mud** curr = &(cinfo->server->mud);
+                        while (*curr != 0) {
+                            char* port = calloc(sizeof(char), 7);
+                            itoa((*curr)->mud->port, port, 0);
+                            size_t namel = strlen((*curr)->mud->name);
+                            size_t addressl = strlen((*curr)->mud->address);
+                            size_t len =  namel + addressl + strlen(port) + 6 + 2 + 2 + 5 + 1;
+                            char* cat = calloc(sizeof(char), len);
+                            memset(cat, 0, len);
+                            strcat(cat, ">");
+                            char* tmp = pad_left(10, ' ', (*curr)->mud->name);
+                            strcat(cat, tmp);
+                            free(tmp);
+                            tmp = pad_left(16, ' ', (*curr)->mud->name);
+                            strcat(cat, tmp);
+                            free(tmp);
+                            tmp = pad_left(6, ' ', port);
+                            strcat(cat, tmp);
+                            free(tmp);
+                            free(port);
+                            server_send_user_channel(cinfo, "smirc", "smirc", cat);
+                            free(cat);
+                            curr = &((*curr)->next);
+                        }
                     }
                 } else {
                     struct minfo* mud = get_mud(cinfo->server, word[2]);
@@ -301,4 +329,36 @@ void server_send_client(struct client* clt, char* command, char* message) {
 
 void server_join_channel(struct client* clt, char *channame) {
     server_send_client(clt, "JOIN", channame);
+}
+
+void server_send_user_channel(struct client* client, char* channel, char* sender, char* message) {
+    char* cat = calloc(sizeof(char), strlen(message) + strlen(channel) + strlen(sender) + 4);
+    strcpy(cat, "#");
+    strcat(cat, channel);
+    strcat(cat, " :");
+    strcat(cat, message);
+
+    server_send(client, sender, "PRIVMSG", cat);
+
+    printf(" %s\n", cat);
+    free(cat);
+}
+
+void server_send_channel(struct irc_server* server, char* channel, char* sender, char* message) {
+    char* cat = calloc(sizeof(char), strlen(message) + strlen(channel) + strlen(sender) + 4);
+    strcpy(cat, "#");
+    strcat(cat, channel);
+    strcat(cat, " :");
+    strcat(cat, message);
+
+    struct client** clients = server->clients;
+    if (clients != 0)
+        for(int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i] != 0) {
+                printf("%i<", i);
+                server_send(clients[i], sender, "PRIVMSG", cat);
+            }
+        }
+    printf(" %s\n", cat);
+    free(cat);
 }

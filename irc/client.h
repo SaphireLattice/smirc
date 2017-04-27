@@ -24,5 +24,7 @@ void server_send_numeric(struct client* clt, int number, char *message);
 void server_send(struct client* clt, char* who, char* command, char *message);
 void server_send_client(struct client* clt, char* command, char* message);
 void server_join_channel(struct client* clt, char *channame);
+void server_send_user_channel(struct client* client, char* channel, char* sender, char* message);
+void server_send_channel(struct irc_server* server, char* channel, char* sender, char* message);
 
 #endif //SMIRC_CLIENT_H

@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 find_package(OpenSSL REQUIRED)
 
 set(COMMON_SOURCES
-        itoa.c
+        utils.c
         config.c
         config.h)
 set(IRC_SOURCES
@@ -17,7 +17,6 @@ set(MUD_SOURCES
         mud/client.c
         mud/telnet.c
         mud/mcp.c
-        random.c
         ssl.c)
 set(SMIRC
         main.c

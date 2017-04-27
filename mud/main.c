@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <libnet.h>
 #include "client.h"
-#include "../itoa.h"
+#include "../utils.h"
 
 int main(int argc, char** args) {
     int err;
