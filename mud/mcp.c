@@ -94,7 +94,6 @@ char* mcp_compose(struct mcp_msg* mcp_msg) {
     strcat(tmp, "P< ");
     strcat(tmp, msg);
     server_send_channel(mcp_msg->state->mud->ircserver, "mcp", mcp_msg->state->mud->name, msg);
-    free(msg);
     return msg;
 }
 
