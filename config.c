@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <stdio.h>
+#include <errno.h>
 #include "config.h"
+#include "utils.h"
 
 struct config* config_new() {
     struct config* conf = malloc(sizeof(struct config));
@@ -11,8 +13,12 @@ struct config* config_new() {
 
 void config_load(struct config* conf, char* filename) {
     FILE* file = fopen(filename, "r");
-    if (file == 0)
+    if(!file && errno == ENOENT)
+        file = fopen(filename, "w+");
+    if(!file) {
+        perror("Config file opening failed");
         return;
+    }
 
     char* buf = calloc(sizeof(char *), 1024);
     while (fgets(buf, 1024, file) != NULL) {
@@ -29,9 +35,9 @@ void config_load(struct config* conf, char* filename) {
                 if (state == 0 && *ptr != ' ')
                     state = 1;
 
-
                 if (state == 1 && *ptr == ' ')
                     state = 2;
+
                 if ((state == 1 || state == 2) && *ptr == '=') {
                     state = 3;
                     ptr++;
@@ -103,7 +109,6 @@ void config_load(struct config* conf, char* filename) {
                     memcpy(data, conf_value, len + 1);
                 }
                 config_value_set(conf, conf_path, conf_type, data);
-                printf("C> \"%s\" =%i= \"%s\"\n", conf_path, conf_type, conf_value);
             } else
                 printf("C> Error %i parsing config entry: %s\n", -state, buf);
             free(conf_value);
@@ -111,7 +116,62 @@ void config_load(struct config* conf, char* filename) {
         }
     }
 
+    fclose(file);
+
     free(buf);
+}
+
+int config_save(struct config* config, char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (file == 0) {
+        perror("Config file opening failed");
+        return EOF;
+    }
+    int ret = config_save_section(config->data, file);
+    fclose(file);
+    return ret;
+}
+
+int config_save_section(struct config_block *block, FILE* file) {
+    while (block != 0) {
+        char* section = config_value_path(block->parent);
+        for (int i = 0; i < CONFIG_BLOCK_SIZE; i++) {
+            struct config_value* val = block->data[i];
+            if (val != 0) {
+                if (val->type != TYPE_SECTION) {
+                    fputs(section, file);
+                    if (block->parent != 0)
+                        fputc('.', file);
+                    fputs(val->name, file);
+                    fputs(" = ", file);
+
+                    char* buf = calloc(sizeof(char), 32);
+                    memset(buf, 0, sizeof(char) * 32);
+                    switch(val->type) {
+                        case TYPE_INT:
+                            fputs(itoa(*(int*)(val->data), buf, 10), file);
+                            break;
+                        case TYPE_LONG:
+                            fputc('l', file);
+                            fputs(ltoa(*(long*)(val->data), buf, 10), file);
+                            break;
+                        case TYPE_STRING:
+                            fputc('"', file);
+                            fputs(val->data, file);
+                            fputc('"', file);
+                        default:
+                            break;
+                    }
+                    fputc('\n', file);
+                    fflush(file);
+                } else
+                    config_save_section(val->data, file);
+            }
+        }
+        free(section);
+        block = block->next;
+    }
+    return 0;
 }
 
 struct config_value* config_value_add(struct config *config, char *path, int type, void *data) {
@@ -126,6 +186,7 @@ struct config_value* config_value_add(struct config *config, char *path, int typ
             struct config_value *val = config_section_get_value(*block, word[i]);
             if (val != 0)
                 if (val->type != TYPE_SECTION) {
+                    printf("C> Attempt to add children value to a non-section value\n");
                     ret = 0; // WE HAVE SOME PROBLEMS PLEASE STAND BY?!
                     error = 1;
                 } else
@@ -139,7 +200,7 @@ struct config_value* config_value_add(struct config *config, char *path, int typ
                 }
         }
 
-        printf("%i: %s\n", i, word[i]);
+        //printf("%i: %s\n", i, word[i]);
         free(word[i]);
     }
     free(word);
@@ -170,14 +231,13 @@ struct config_value* config_value_get(struct config *config, char *path) {
     for(int i = 0; (i < 32) && (word[i] != 0); i++) {
         struct config_value* val = config_section_get_value(block, word[i]);
         if (val != 0) {
-            if (val->type != TYPE_SECTION)
-                ret = val; // TODO: Make a check if we got the correct value
-            else
+            ret = val;
+            if (val->type == TYPE_SECTION)
                 block = (struct config_block *) val->data;
         } else
             ret = 0;
 
-        printf("%i: %s\n", i, word[i]);
+        //printf("%i: %s\n", i, word[i]);
         free(word[i]);
     }
     free(word);
@@ -190,10 +250,21 @@ struct config_value* config_value_get(struct config *config, char *path) {
     return ret;
 }
 
+struct config_value* config_value_get_soft(struct config *config, char *path, int type, void* failsafe) {
+    struct config_value* ret = config_value_get(config, path);
+    if (ret == 0)
+        ret = config_value_add(config, path, type, failsafe);
+    else {
+        if (ret->type != type) {
+            config_value_set(config, path, type, failsafe);
+        }
+    }
+    return ret;
+}
+
 int config_value_type(struct config_value* value) {
     return value->type;
 }
-
 
 char** config_explode_path(char *path) {
     char** word = calloc(sizeof(char *), 32);
@@ -201,7 +272,6 @@ char** config_explode_path(char *path) {
     memset(word, 0, sizeof(char *) * 32);
     word[0] = calloc(sizeof(char), 32);
     memset(word[0], 0, sizeof(char) * 32);
-    word[1] = ptr;
     int words = 0;
     int w = 0;
 

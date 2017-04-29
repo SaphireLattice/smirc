@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 
 #include "irc/irc_server.h"
+#include "config.h"
 
 /*pthread_t tid[2];
 struct irc_server* server;
@@ -35,12 +36,16 @@ int main(int argc, char** args) {
     //int err;
     struct irc_server* server;
 
+    struct config* config = config_new();
+    config_load(config, "smirc.conf");
     server = malloc(sizeof(struct irc_server));
     memset(server, 0, sizeof(struct irc_server));
     server->name = "localhost";
     server->debug = 0;
     server->mud = 0;
+    server->config = config;
 
+    server_init(server);
     server_loop(server);
     /*
     while(i < 2) {

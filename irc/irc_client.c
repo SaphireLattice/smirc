@@ -57,6 +57,7 @@ void rem_client(struct irc_client* client) {
     for (; (client->server->clients[i] != 0 && client != client->server->clients[i]); i++);
     if (i == MAX_CLIENTS)
         return;
+    shutdown(client->socket, SHUT_RD);
     client->server->clients[i] = 0;
     free(client->nick);
     free(client);
@@ -281,10 +282,8 @@ void server_send_channel(struct irc_server* server, char* channel, char* sender,
     if (clients != 0)
         for(int i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i] != 0) {
-                printf("%i<", i);
                 server_send(clients[i], sender, "PRIVMSG", cat);
             }
         }
-    printf(" %s\n", cat);
     free(cat);
 }

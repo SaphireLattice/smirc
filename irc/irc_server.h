@@ -19,12 +19,14 @@ struct irc_server {
   struct irc_mud* mud;
 
   struct cmd* commands;
+  struct config* config;
 
   int debug;
 };
 
 #include "irc_client.h"
 
+void server_init(struct irc_server*);
 void* server_loop(void*);
 
 #endif //SMIRC_SERVER_H

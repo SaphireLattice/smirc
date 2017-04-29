@@ -30,11 +30,16 @@ struct config {
 };
 
 struct config* config_new();
+
 void config_load(struct config* conf, char* filename);
+int config_save(struct config* config, char* filename);
+int config_save_section(struct config_block *block, FILE* file);
 
 struct config_value* config_value_add(struct config *config, char *path, int type, void *data);
 struct config_value* config_value_set(struct config *config, char *path, int type, void *data);
 struct config_value* config_value_get(struct config *config, char *path);
+struct config_value* config_value_get_soft(struct config *config, char *path, int type, void* failsafe);
+
 int config_value_type(struct config_value* value);
 
 char** config_explode_path(char *path);

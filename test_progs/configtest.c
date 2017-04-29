@@ -15,7 +15,11 @@ int main(int argc, char** args) {
         printf("%i\n", *(int*) val->data);
     else
         printf("No value!\n");
+
+    config_save(conf, "test2.conf");
+
     free(port);
+
 
     return 0;
 }

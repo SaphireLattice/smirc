@@ -7,10 +7,11 @@
 #include "../mud/client.h"
 #include "../utils.h"
 #include "commands.h"
+#include "../config.h"
 
 void commands_output(struct cmd_env* env, char* msg) {
     size_t l = strlen(env->command) + strlen(msg);
-    char* cat = calloc(sizeof(char), l + 2);
+    char* cat = calloc(sizeof(char), l + 3);
     memset(cat, 0, l +2);
     strcat(cat, env->command);
     strcat(cat, ": ");
@@ -25,6 +26,8 @@ void commands_init(struct irc_server* server) {
     commands_add(server, "quit", &command_quit);
     commands_add(server, "debug", &command_debug);
     commands_add(server, "list", &command_list);
+    commands_add(server, "save", &command_save);
+    commands_add(server, "load", &command_load);
 }
 
 void commands_add(struct irc_server* server, char *name, void (*function)(struct cmd_env* env)) {
@@ -72,11 +75,33 @@ void command_connect(struct cmd_env* env) {
     if (env->argc < 1)
         commands_output(env, "Invalid connect command!");
     else {
+        if (get_mud(env->cinfo->server, env->args[0]) != 0) {
+            commands_output(env, "Error, already connected.");
+            return;
+        }
+
         struct minfo* mud = malloc(sizeof(struct minfo));
         mud->ircserver = env->cinfo->server;
         mud->name = strdup(env->args[0]);
 
-        size_t l = strlen(env->args[0]) + 4;
+        size_t namel = strlen(env->args[0]);
+        if (namel == 0) {
+            commands_output(env, "Error, name is empty! Somehow. Please report to developer RIGHT NOW!");
+            return;
+        }
+
+        if (namel >= 32) {
+            commands_output(env, "Error, name is too long!");
+            return;
+        }
+
+        if (strchr(env->args[0], '.') != 0) {
+            commands_output(env, "Error, invalid name. Name must NOT cointain a dot.");
+            return;
+        }
+
+
+        size_t l = namel + 4;
         char* chan = calloc(sizeof(char), l);
         memset(chan, 0, sizeof(char) * l);
         strcpy(chan + 1, env->args[0]);
@@ -84,18 +109,62 @@ void command_connect(struct cmd_env* env) {
         server_join_channel(env->cinfo, chan);
         free(chan);
 
-        mud->address = strdup(env->args[2]);
-        mud->use_ssl = 1;
-        if (env->argc >= 3) {
-            mud->port = atoi(strdup(env->args[4]));
-            if (env->args[4][0] == '-') {
-                mud->port = -mud->port;
-                mud->use_ssl = 0;
+        char* path = calloc(sizeof(char), l + 36);
+        memset(path, 0, sizeof(char) * (l + 36));
+        memcpy(path, "mud.", 4);
+        strcat(path, env->args[0]);
+        char* start = path + 5 + namel;
+
+        printf("%s\n", path);
+        if (env->argc == 1) {
+            struct config_value* mud_conf = config_value_get(mud->ircserver->config, path);
+            if (mud_conf == 0) {
+                commands_output(env, "Error, no such server stored in config.");
+                free(path);
+                return;
             }
-        } else
-            mud->port = 23;
+            strcat(path, ".");
+            strcpy(start, "address");
+            printf("%s\n", path);
+            mud->address = (char*) config_value_get(mud->ircserver->config, path)->data;
+            strcpy(start, "port");
+            printf("%s\n", path);
+            mud->port = *((int*) config_value_get(mud->ircserver->config, path)->data);
+            strcpy(start, "ssl");
+            printf("%s\n", path);
+            mud->use_ssl = *((int*) config_value_get(mud->ircserver->config, path)->data);
+        } else {
+            mud->address = strdup(env->args[2]);
+            strcat(path, ".");
+            strcpy(start, "address");
+            printf("%s\n", path);
+            config_value_set(mud->ircserver->config, path, TYPE_STRING, strdup(mud->address));
+
+            mud->use_ssl = 0;
+            if (env->argc >= 3) {
+                mud->port = atoi(strdup(env->args[4]));
+                if (env->args[4][0] == '+') {
+                    mud->port = -mud->port;
+                    mud->use_ssl = 1;
+                }
+            } else
+                mud->port = 23;
+
+            strcpy(start, "port");
+            printf("%s\n", path);
+            int *port = malloc(sizeof(int));
+            *port = mud->port;
+            config_value_set(mud->ircserver->config, path, TYPE_INT, port);
+            strcpy(start, "ssl");
+            printf("%s\n", path);
+            int *ssl = malloc(sizeof(int));
+            *ssl = mud->use_ssl;
+            config_value_set(mud->ircserver->config, path, TYPE_INT, ssl);
+        }
+
         add_mud(mud);
         pthread_create(&mud->thread, NULL, &mud_connect, mud);
+        free(path);
     }
 }
 
@@ -151,4 +220,18 @@ void command_list(struct cmd_env* env) {
     }
 }
 
-#include "commands.h"
+void command_save(struct cmd_env* env) {
+    if (env->argc == 0)
+        config_save(env->cinfo->server->config, "smirc.conf");
+    else
+        config_save(env->cinfo->server->config, env->args[0]);
+    commands_output(env, "Saved!");
+}
+
+void command_load(struct cmd_env* env) {
+    if (env->argc == 0)
+        config_save(env->cinfo->server->config, "smirc.conf");
+    else
+        config_save(env->cinfo->server->config, env->args[0]);
+    commands_output(env, "Loaded!");
+}

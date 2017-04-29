@@ -23,5 +23,7 @@ void command_disconnect(struct cmd_env* env);
 void command_quit(struct cmd_env* env);
 void command_debug(struct cmd_env* env);
 void command_list(struct cmd_env* env);
+void command_save(struct cmd_env* env);
+void command_load(struct cmd_env* env);
 
 #endif //SMIRC_COMMANDS_H

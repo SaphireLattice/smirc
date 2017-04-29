@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include "utils.h"
 
 char* pad_left(int needed, char pad, char* str) {
     size_t len = strlen(str);
@@ -17,11 +18,15 @@ char* pad_left(int needed, char pad, char* str) {
 
 int urandom_fd = -2;
 // check that the base if valid
-char* itoa (int value, char *result, int base) {
+char* itoa(int value, char *result, int base) {
+    return ltoa((long) value, result, base);
+}
+
+char* ltoa(long value, char *result, int base) {
     if (base < 2 || base > 36) { *result = '\0'; return result; }
 
     char* ptr = result, *ptr1 = result, tmp_char;
-    int tmp_value;
+    long tmp_value;
 
     do {
     tmp_value = value;
