@@ -9,6 +9,7 @@
 #include "irc_server.h"
 #include "commands.h"
 #include "../config.h"
+#include "../mud/client.h"
 
 void server_init(struct irc_server* server) {
     commands_init(server);
@@ -47,6 +48,30 @@ void server_init(struct irc_server* server) {
     listen(server->socket.socket_description, 3);
 
     server->socket.desc_size = sizeof(struct sockaddr_in);
+
+    struct config_value* servers = config_value_get(server->config, "mud");
+    if (servers != 0) {
+        struct config_block* block = (struct config_block*) servers->data;
+        while (block != 0) {
+            for (int i = 0; i < CONFIG_BLOCK_SIZE; i++) {
+                if (block->data[i] != 0
+                    && (*((int*) config_section_get_value(block->data[i]->data, "autoconnect")->data) == 1))
+                {
+                    struct minfo* mud = malloc(sizeof(struct minfo));
+                    mud->ircserver =server;
+                    mud->name = strdup(block->data[i]->name);
+
+                    mud->address = (char*) config_section_get_value(block->data[i]->data, "address")->data;
+                    mud->port = *((int*) config_section_get_value(block->data[i]->data, "port")->data);
+                    mud->use_ssl = *((int*) config_section_get_value(block->data[i]->data, "ssl")->data);
+
+                    add_mud(mud);
+                    pthread_create(&mud->thread, NULL, &mud_connect, mud);
+                }
+            };
+            block = block->next;
+        }
+    }
 }
 
 void* server_loop(void* arg) {

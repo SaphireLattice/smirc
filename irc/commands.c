@@ -144,7 +144,6 @@ void command_connect(struct cmd_env* env) {
             if (env->argc >= 3) {
                 mud->port = atoi(strdup(env->args[4]));
                 if (env->args[4][0] == '+') {
-                    mud->port = -mud->port;
                     mud->use_ssl = 1;
                 }
             } else
