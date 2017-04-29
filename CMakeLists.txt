@@ -11,8 +11,9 @@ set(COMMON_SOURCES
         config.c
         config.h)
 set(IRC_SOURCES
-        irc/server.c
-        irc/client.c)
+        irc/irc_server.c
+        irc/irc_client.c
+        irc/commands.c)
 set(MUD_SOURCES
         mud/client.c
         mud/telnet.c

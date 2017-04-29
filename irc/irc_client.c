@@ -7,10 +7,11 @@
 #include <arpa/inet.h>
 #include <error.h>
 
-#include "client.h"
-#include "server.h"
+#include "irc_client.h"
+#include "irc_server.h"
 #include "../mud/client.h"
 #include "../utils.h"
+#include "commands.h"
 
 char** sanitize(char* str) {
     size_t len = strlen(str);
@@ -36,13 +37,13 @@ char** sanitize(char* str) {
     return pointers;
 }
 
-struct client* add_client(struct irc_server* server) {
-    struct client** clients = server->clients;
+struct irc_client* add_client(struct irc_server* server) {
+    struct irc_client** clients = server->clients;
     int i = 0;
     for (; (i < MAX_CLIENTS && clients[i] != 0); i++);
     if (i == MAX_CLIENTS)
         return 0;
-    clients[i] = malloc(sizeof(struct client));
+    clients[i] = malloc(sizeof(struct irc_client));
     clients[i]->id = i;
     clients[i]->state = 0;
     clients[i]->server = server;
@@ -51,7 +52,7 @@ struct client* add_client(struct irc_server* server) {
     return clients[i];
 }
 
-void rem_client(struct client* client) {
+void rem_client(struct irc_client* client) {
     int i = 0;
     for (; (client->server->clients[i] != 0 && client != client->server->clients[i]); i++);
     if (i == MAX_CLIENTS)
@@ -63,7 +64,7 @@ void rem_client(struct client* client) {
 
 void* client_callback(void* arg) {
     int quit = 0;
-    struct client* cinfo = (struct client*) arg;
+    struct irc_client* cinfo = (struct irc_client*) arg;
     long read_size;
     char* client_message = calloc(sizeof(char), 2048);
     memset(client_message, 0, sizeof(char) * 2048);
@@ -94,6 +95,7 @@ void* client_callback(void* arg) {
                     word[words][w++] = *ptr;
                 ptr++;
             }
+            words /= 2;
 
             printf("First word: %s\n", word[0]);
 
@@ -118,104 +120,28 @@ void* client_callback(void* arg) {
                     server_join_channel(cinfo, "#smirc");
                     server_join_channel(cinfo, "#mcp");
                     cinfo->state = 1;
-                    //TODO: redo MUD buffers to actually use own buffers
-                    /*
-                    char** mud_buffer = get_line_buffer();
-                    for (int j=0; (mud_buffer[j] != 0); j++) {
-                        char* cat = calloc(sizeof(char), strlen(mud_buffer[j]) + 9);
-                        strcpy(cat, "#smirc :");
-                        strcat(cat, mud_buffer[j]);
 
-                        server_send(cinfo, ">","PRIVMSG", cat);
-                        free(cat);
-                    }*/
+                    struct irc_mud* next = cinfo->server->mud;
+                    while (next != 0) {
+                        size_t l = strlen(next->mud->name) + 3;
+                        char* chan = calloc(sizeof(char), l);
+                        memset(chan, 0, sizeof(char) * l);
+                        strcpy(chan + 1, next->mud->name);
+                        chan[0] = '#';
+                        server_join_channel(cinfo, chan);
+
+                        char** mud_buffer = get_line_buffer(next->mud);
+                        for (int j=0; (mud_buffer[j] != 0); j++) {
+                            server_send_user_channel(cinfo, chan + 1, ">", mud_buffer[j]);
+                        }
+                        free(chan);
+                        next = next->next;
+                    }
                 }
             }
             if (strcmp(word[0], "PRIVMSG") == 0) {
                 if (strcmp(word[2], "#smirc") == 0) {
-                    if(strcmp(word[4], ":connect") == 0) {
-                        if (words < 8)
-                            printf("I> Invalid connect command!\n");
-                        else {
-                            struct minfo* mud = malloc(sizeof(struct minfo));
-                            mud->ircserver = cinfo->server;
-                            mud->name = strdup(word[6]);
-
-                            size_t l = strlen(word[6]) + 4;
-                            char* chan = calloc(sizeof(char), l);
-                            memset(chan, 0, sizeof(char) * l);
-                            strcpy(chan + 1, word[6]);
-                            chan[0] = '#';
-                            server_join_channel(cinfo, chan);
-                            free(chan);
-
-                            mud->address = strdup(word[8]);
-                            mud->use_ssl = 1;
-                            if (words >= 10) {
-                                mud->port = atoi(strdup(word[10]));
-                                if (word[10][0] == '-') {
-                                    mud->port = -mud->port;
-                                    mud->use_ssl = 0;
-                                }
-                            } else
-                                mud->port = 23;
-                            add_mud(mud);
-                            pthread_create(&mud->thread, NULL, &mud_connect, mud);
-                        }
-                    }
-                    if(strcmp(word[4], ":disconnect") == 0) {
-                        if (words < 6)
-                            printf("I> Invalid connect command!\n");
-                        else {
-                            struct minfo *mud = get_mud(cinfo->server, word[6]);
-                            if (mud != 0) {
-                                shutdown(mud->socket, SHUT_RD);
-                                del_mud(mud);
-                            } else
-                                printf("I> No such MUD connect!\n");
-                        }
-                    }
-                    if(strcmp(word[4], ":quit") == 0) {
-                        quit = 1;
-                        for(int i = 0; (i < 256) && (word[i] != 0); i+=2) {
-                            free(word[i]);
-                        }
-                        shutdown(cinfo->server->socket.socket_description, SHUT_RDWR);
-                        break;
-                    }
-                    if(strcmp(word[4], ":debug") == 0) {
-                        if (words == 8 && strcasecmp(word[6], "off"))
-                            cinfo->server->debug = 0;
-                        else
-                            cinfo->server->debug = 1;
-                    }
-                    if(strcmp(word[4], ":list") == 0) {
-                        server_send_user_channel(cinfo, "smirc", "smirc", "Connected to:");
-                        struct irc_mud** curr = &(cinfo->server->mud);
-                        while (*curr != 0) {
-                            char* port = calloc(sizeof(char), 7);
-                            itoa((*curr)->mud->port, port, 0);
-                            size_t namel = strlen((*curr)->mud->name);
-                            size_t addressl = strlen((*curr)->mud->address);
-                            size_t len =  namel + addressl + strlen(port) + 6 + 2 + 2 + 5 + 1;
-                            char* cat = calloc(sizeof(char), len);
-                            memset(cat, 0, len);
-                            strcat(cat, ">");
-                            char* tmp = pad_left(10, ' ', (*curr)->mud->name);
-                            strcat(cat, tmp);
-                            free(tmp);
-                            tmp = pad_left(16, ' ', (*curr)->mud->name);
-                            strcat(cat, tmp);
-                            free(tmp);
-                            tmp = pad_left(6, ' ', port);
-                            strcat(cat, tmp);
-                            free(tmp);
-                            free(port);
-                            server_send_user_channel(cinfo, "smirc", "smirc", cat);
-                            free(cat);
-                            curr = &((*curr)->next);
-                        }
-                    }
+                    commands_run(cinfo, word[4] + 1, words - 2, &(word[6]));
                 } else {
                     struct minfo* mud = get_mud(cinfo->server, word[2]);
                     if (mud != 0) {
@@ -257,7 +183,7 @@ void* client_callback(void* arg) {
 }
 
 
-void server_send_plain(struct client* clt, char* command, char* message) {
+void server_send_plain(struct irc_client* clt, char* command, char* message) {
     ssize_t written = 0;
     written += write(clt->socket, command, strlen(command) * sizeof(char));
     written += write(clt->socket, " ", 1 * sizeof(char));
@@ -268,7 +194,7 @@ void server_send_plain(struct client* clt, char* command, char* message) {
         error(-1, 1, "well fuck");
 }
 
-void server_send_numeric(struct client* clt, int number, char *message) {
+void server_send_numeric(struct irc_client* clt, int number, char *message) {
     ssize_t written = 0;
     written += write(clt->socket, ":", 1 * sizeof(char));
     written += write(clt->socket, clt->server->name, strlen(clt->server->name) * sizeof(char));
@@ -295,7 +221,7 @@ void server_send_numeric(struct client* clt, int number, char *message) {
         error(-1, 1, "well fuck");
 }
 
-void server_send(struct client* clt, char* who, char* command, char *message) {
+void server_send(struct irc_client* clt, char* who, char* command, char *message) {
     ssize_t written = 0;
     written += write(clt->socket, ":", 1 * sizeof(char));
     written += write(clt->socket, who, strlen(who) * sizeof(char));
@@ -309,7 +235,7 @@ void server_send(struct client* clt, char* who, char* command, char *message) {
         error(-1, 1, "well fuck");
 }
 
-void server_send_client(struct client* clt, char* command, char* message) {
+void server_send_client(struct irc_client* clt, char* command, char* message) {
     size_t len = 0;
     len += strlen(clt->nick);
     len += strlen(clt->nick);
@@ -327,11 +253,11 @@ void server_send_client(struct client* clt, char* command, char* message) {
     free(who);
 }
 
-void server_join_channel(struct client* clt, char *channame) {
+void server_join_channel(struct irc_client* clt, char *channame) {
     server_send_client(clt, "JOIN", channame);
 }
 
-void server_send_user_channel(struct client* client, char* channel, char* sender, char* message) {
+void server_send_user_channel(struct irc_client* client, char* channel, char* sender, char* message) {
     char* cat = calloc(sizeof(char), strlen(message) + strlen(channel) + strlen(sender) + 4);
     strcpy(cat, "#");
     strcat(cat, channel);
@@ -351,7 +277,7 @@ void server_send_channel(struct irc_server* server, char* channel, char* sender,
     strcat(cat, " :");
     strcat(cat, message);
 
-    struct client** clients = server->clients;
+    struct irc_client** clients = server->clients;
     if (clients != 0)
         for(int i = 0; i < MAX_CLIENTS; i++) {
             if (clients[i] != 0) {

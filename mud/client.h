@@ -31,7 +31,7 @@ struct minfo {
   struct mcp_state* mcp_state;
 };
 
-char** get_line_buffer();
+char** get_line_buffer(struct minfo* mud);
 void send_line_mud(struct minfo* mud_l, char* line);
 
 int mud_write(struct minfo* mud, char* buffer, int length);

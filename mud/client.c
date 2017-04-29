@@ -13,8 +13,8 @@
 #include "telnet.h"
 #include "mcp.h"
 #ifndef STANDALONE_MUD
-# include "../irc/client.h"
-# include "../irc/server.h"
+# include "../irc/irc_client.h"
+# include "../irc/irc_server.h"
 #endif
 
 char** get_line_buffer(struct minfo* mud) {
@@ -262,7 +262,7 @@ void free_mud(struct minfo *mud) {
     for (int i = 0; mud->irc_buffer[i] != 0; i++)
         free(mud->irc_buffer[i]);
     free(mud->irc_buffer);
-    if (mud->use_ssl) {
+    if (mud->use_ssl && mud->ssl != 0) {
         SSL_shutdown(mud->ssl);
         free(mud->ssl);
     }

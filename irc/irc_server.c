@@ -5,16 +5,17 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include "server.h"
-#include "../utils.h"
-#include "../mud/client.h"
+#include "irc_server.h"
+#include "commands.h"
 
 void* server_loop(void* arg) {
     struct irc_server* server = (struct irc_server*) arg;
 
+    commands_init(server);
+
     int iSetOption = 1;
-    server->clients = calloc(sizeof(struct client*), MAX_CLIENTS + 1);
-    memset(server->clients, 0, sizeof(struct client*) * (MAX_CLIENTS + 1));
+    server->clients = calloc(sizeof(struct irc_client*), MAX_CLIENTS + 1);
+    memset(server->clients, 0, sizeof(struct irc_client*) * (MAX_CLIENTS + 1));
 
     //Create socket
     server->socket.socket_description = socket(AF_INET , SOCK_STREAM , IPPROTO_TCP);
@@ -59,7 +60,7 @@ void* server_loop(void* arg) {
             break;
         }
         puts("Connection accepted");
-        struct client* cinfo = add_client(server);
+        struct irc_client* cinfo = add_client(server);
         if (cinfo != 0) {
             int sock = *client_sock;
             cinfo->socket = sock;

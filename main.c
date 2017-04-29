@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#include "irc/server.h"
+#include "irc/irc_server.h"
 
 /*pthread_t tid[2];
 struct irc_server* server;

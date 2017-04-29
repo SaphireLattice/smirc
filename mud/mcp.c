@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "mcp.h"
-#include "../irc/client.h"
+#include "../irc/irc_client.h"
 #include "telnet.h"
 #include "../utils.h"
 

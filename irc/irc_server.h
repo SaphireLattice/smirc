@@ -14,14 +14,16 @@ struct irc_mud {
 
 struct irc_server {
   char* name;
-  struct client** clients;
+  struct irc_client** clients;
   struct irc_socket socket;
   struct irc_mud* mud;
+
+  struct cmd* commands;
 
   int debug;
 };
 
-#include "client.h"
+#include "irc_client.h"
 
 void* server_loop(void*);
 
