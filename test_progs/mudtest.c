@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <libnet.h>
-#include "client.h"
+#include "../mud/client.h"
 #include "../utils.h"
 
 int main(int argc, char** args) {

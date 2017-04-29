@@ -20,7 +20,6 @@ set(MUD_SOURCES
         ssl.c)
 set(SMIRC
         main.c
-        main.h
         ${IRC_SOURCES}
         ${MUD_SOURCES}
         ${COMMON_SOURCES})
@@ -31,8 +30,12 @@ target_link_libraries(smirc
         ${OPENSSL_LIBRARIES})
 
 add_executable(colortest
-        color_test.c
+        test_progs/colortest.c
         mud/telnet.c
+        ${COMMON_SOURCES})
+
+add_executable(configtest
+        test_progs/configtest.c
         ${COMMON_SOURCES})
 
 #add_executable(mudtest

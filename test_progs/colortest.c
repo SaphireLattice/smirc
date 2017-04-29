@@ -1,7 +1,7 @@
 #include <memory.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "mud/telnet.h"
+#include "../mud/telnet.h"
 
 int main(int argc, char** args) {
     char* str = "\x1b[32;46mABC\x1b[35mABC";
