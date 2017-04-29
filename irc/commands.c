@@ -193,31 +193,70 @@ void command_debug(struct cmd_env* env) {
 }
 
 void command_list(struct cmd_env* env) {
-    server_send_user_channel(env->cinfo, "smirc", "smirc", "Connected to:");
-    struct irc_mud** curr = &(env->cinfo->server->mud);
-    while (*curr != 0) {
+    server_send_user_channel(env->cinfo, "smirc", "smirc", "====== Server list ======");
+    server_send_user_channel(env->cinfo, "smirc", "smirc", "Connected:");
+    struct irc_mud* curr = env->cinfo->server->mud;
+    while (curr != 0) {
         char* port = calloc(sizeof(char), 7);
-        itoa((*curr)->mud->port, port, 0);
-        size_t namel = strlen((*curr)->mud->name);
-        size_t addressl = strlen((*curr)->mud->address);
+        itoa(curr->mud->port, port, 10);
+        size_t namel = strlen(curr->mud->name);
+        size_t addressl = strlen(curr->mud->address);
         size_t len =  namel + addressl + strlen(port) + 6 + 2 + 2 + 5 + 1;
         char* cat = calloc(sizeof(char), len);
         memset(cat, 0, len);
         strcat(cat, ">");
-        char* tmp = pad_left(10, ' ', (*curr)->mud->name);
+        char* tmp = pad_left(10, ' ', curr->mud->name);
         strcat(cat, tmp);
         free(tmp);
-        tmp = pad_left(16, ' ', (*curr)->mud->name);
+        tmp = pad_left(16, ' ', curr->mud->address);
         strcat(cat, tmp);
         free(tmp);
         tmp = pad_left(6, ' ', port);
         strcat(cat, tmp);
+        strcat(cat, curr->mud->use_ssl ? "" : " ssl");
         free(tmp);
         free(port);
         server_send_user_channel(env->cinfo, "smirc", "smirc", cat);
         free(cat);
-        curr = &((*curr)->next);
+        curr = curr->next;
     }
+    server_send_user_channel(env->cinfo, "smirc", "smirc", "Not connected: ");
+    struct config_value* servers = config_value_get(env->cinfo->server->config, "mud");
+    if (servers != 0) {
+        struct config_block* block = (struct config_block*) servers->data;
+        while (block != 0) {
+            for (int i = 0; i < CONFIG_BLOCK_SIZE; i++) {
+                if (block->data[i] != 0 && get_mud(env->cinfo->server, block->data[i]->name) == 0) {
+                    char* port = calloc(sizeof(char), 7);
+                    itoa(*((int *) config_section_get_value(block->data[i]->data, "port")->data), port, 10);
+                    char* name = block->data[i]->name;
+                    char* address = (char *) config_section_get_value(block->data[i]->data, "address")->data;
+
+                    size_t namel = strlen(name);
+                    size_t addressl = strlen(address);
+                    size_t len =  namel + addressl + strlen(port) + 6 + 2 + 2 + 5 + 1;
+                    char* cat = calloc(sizeof(char), len);
+                    memset(cat, 0, len);
+                    strcat(cat, ">");
+                    char* tmp = pad_left(10, ' ', name);
+                    strcat(cat, tmp);
+                    free(tmp);
+                    tmp = pad_left(16, ' ', address);
+                    strcat(cat, tmp);
+                    free(tmp);
+                    tmp = pad_left(6, ' ', port);
+                    strcat(cat, tmp);
+                    strcat(cat, *((int *) config_section_get_value(block->data[i]->data, "ssl")->data) ? "" : " ssl");
+                    free(tmp);
+                    free(port);
+                    server_send_user_channel(env->cinfo, "smirc", "smirc", cat);
+                    free(cat);
+                }
+            };
+            block = block->next;
+        }
+    }
+    server_send_user_channel(env->cinfo, "smirc", "smirc", "=========================");
 }
 
 void command_save(struct cmd_env* env) {
