@@ -80,10 +80,6 @@ void command_connect(struct cmd_env* env) {
             return;
         }
 
-        struct minfo* mud = malloc(sizeof(struct minfo));
-        mud->ircserver = env->cinfo->server;
-        mud->name = strdup(env->args[0]);
-
         size_t namel = strlen(env->args[0]);
         if (namel == 0) {
             commands_output(env, "Error, name is empty! Somehow. Please report to developer RIGHT NOW!");
@@ -115,10 +111,16 @@ void command_connect(struct cmd_env* env) {
         strcat(path, env->args[0]);
         char* start = path + 5 + namel;
 
+
+        struct minfo* mud = malloc(sizeof(struct minfo));
+        mud->ircserver = env->cinfo->server;
+        mud->name = strdup(env->args[0]);
+
         if (env->argc == 1) {
             struct config_value* mud_conf = config_value_get(mud->ircserver->config, path);
             if (mud_conf == 0) {
                 commands_output(env, "Error, no such server stored in config.");
+                free(mud);
                 free(path);
                 return;
             }
@@ -197,10 +199,10 @@ void command_list(struct cmd_env* env) {
         char* cat = calloc(sizeof(char), len);
         memset(cat, 0, len);
         strcat(cat, ">");
-        char* tmp = pad_left(10, ' ', curr->mud->name);
+        char* tmp = pad_left(15, ' ', curr->mud->name);
         strcat(cat, tmp);
         free(tmp);
-        tmp = pad_left(16, ' ', curr->mud->address);
+        tmp = pad_left(24, ' ', curr->mud->address);
         strcat(cat, tmp);
         free(tmp);
         tmp = pad_left(6, ' ', port);
@@ -229,11 +231,11 @@ void command_list(struct cmd_env* env) {
                     size_t len =  namel + addressl + strlen(port) + 6 + 2 + 2 + 5 + 1;
                     char* cat = calloc(sizeof(char), len);
                     memset(cat, 0, len);
-                    strcat(cat, ">");
-                    char* tmp = pad_left(10, ' ', name);
+                    strcat(cat, " ");
+                    char* tmp = pad_left(15, ' ', name);
                     strcat(cat, tmp);
                     free(tmp);
-                    tmp = pad_left(16, ' ', address);
+                    tmp = pad_left(24, ' ', address);
                     strcat(cat, tmp);
                     free(tmp);
                     tmp = pad_left(6, ' ', port);

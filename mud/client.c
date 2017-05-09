@@ -300,12 +300,15 @@ struct minfo* get_mud(struct irc_server* server, char* channel) {
     return 0;
 }
 
-void del_mud(struct minfo* mud) {
+void del_mud(struct minfo* mud) { // A-B-C, deleting mud B
     struct irc_mud** curr = &(mud->ircserver->mud);
     while (*curr != 0) {
+        printf("%p: %p\n", (void*) curr, (void*) *curr);
         if ((*curr)->mud == mud) {
-            (*curr) = (*curr)->next;
-            free(*curr);
+            struct irc_mud* next = (*curr)->next; // Store &C
+            // Otherwise we free the C instead of B
+            free(*curr); // Free _B_
+            (*curr) = next; // A->next = &C
             shutdown(mud->socket, SHUT_RD);
             break;
         }
