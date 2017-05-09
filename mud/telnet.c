@@ -22,9 +22,9 @@ char* get_protocols() {
 }
 
 char* ttoa(unsigned int code) {
-    char* result = calloc(sizeof(char), 5);
+    char* result = calloc(sizeof(char), 6);
     memset(result, 0, 5);
-    switch(code) {
+    switch(code) { // There needs to be a better option
         case IAC:
             memcpy(result, "IAC", 4);
             break;
@@ -49,17 +49,19 @@ char* ttoa(unsigned int code) {
         case GMCP:
             memcpy(result, "GMCP", 5);
             break;
+        case COMPRESS2:
+            memcpy(result, "MCCP2", 6);
         case NOP:
             memcpy(result, "NOP", 4);
             break;
         default: {
             int i = 0;
-            result[i++] = '0';
-            result[i++] = 'x';
+            result[i++] = '0'; // "0"
+            result[i++] = 'x'; // "0x"
             if (code < 0x10) {
-                result[i++] = '0';
+                result[i++] = '0'; // "0x0"
             }
-            itoa(code, result + i, 16);
+            itoa(code, result + i, 16); // Because printf is for weak!
         }
     }
     return result;

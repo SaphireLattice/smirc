@@ -19,21 +19,20 @@ char** sanitize(char* str) {
     char** pointers = calloc(sizeof(char*), 8);
     int parts = 0;
     int blob_ptr = 0;
-    pointers[++parts] = blob;
+    pointers[parts++] = blob;
     for (size_t str_ptr = 0; str_ptr <= len; str_ptr++) {
         switch(str[str_ptr]) {
             case '\r':
                 break;
             case '\n':
                 blob[blob_ptr++] = '\0';
-                pointers[++parts] = blob + blob_ptr;
+                pointers[parts++] = blob + blob_ptr;
                 break;
             default:
                 blob[blob_ptr++] = str[str_ptr];
         }
     }
-    pointers[0] = malloc(sizeof(char));
-    pointers[0][0] = (char) (parts - 1);
+    pointers[parts - 1] = 0;
     return pointers;
 }
 
@@ -64,41 +63,41 @@ void rem_client(struct irc_client* client) {
 }
 
 void* client_callback(void* arg) {
-    int quit = 0;
     struct irc_client* cinfo = (struct irc_client*) arg;
     long read_size;
     char* client_message = calloc(sizeof(char), 2048);
     memset(client_message, 0, sizeof(char) * 2048);
+    char* word_blob = calloc(sizeof(char), 2048);
     char **word = calloc(sizeof(char *), 256);
 
     //Receive a message from client
-    while( (quit != 1) && (read_size = recv(cinfo->socket, client_message, 2048, 0)) > 0 ) {
+    while((read_size = recv(cinfo->socket, client_message, 2048, 0)) > 0 ) {
         char** sanitized = sanitize(client_message);
-        for (int msg = 1; msg <= (int) sanitized[0][0]; msg++) {
+        int msg = 0;
+        while (sanitized[msg] != 0) {
             printf("%i> %s\n", cinfo->id, sanitized[msg]);
 
-            char *ptr = sanitized[msg];
+            int offset = 0;
+            strcpy(word_blob, sanitized[msg]);
             memset(word, 0, sizeof(char *) * 256);
-            word[0] = calloc(sizeof(char), 64);
-            memset(word[0], 0, sizeof(char) * 64);
-            word[1] = ptr;
+            word[0] = word_blob;
+            word[1] = sanitized[msg];
             int words = 0;
-            int w = 0;
 
-            while (*ptr != '\0') {
-                if (*ptr == ' ') {
-                    words+=2;
-                    word[words] = calloc(sizeof(char), 64);
-                    memset(word[words], 0, sizeof(char) * 64);
-                    word[words + 1] = ptr + 1;
-                    w = 0;
-                } else
-                    word[words][w++] = *ptr;
-                ptr++;
+            while (*(sanitized[msg] + offset) != '\0') {
+                if (*(sanitized[msg] + offset) == ' ') {
+                    *(word_blob + offset) = '\0';
+                    if (*(sanitized[msg] + offset + 1) != ' ') {
+                        words += 2;
+                        word[words] = (word_blob + offset + 1);
+                        word[words + 1] = (sanitized[msg] + offset + 1);
+                    }
+                }
+                offset++;
             }
             words /= 2;
 
-            printf("First word: %s\n", word[0]);
+            printf("I> Command: %s\n", word[0]);
 
             if (strcmp(word[0], "NICK") == 0) {
                 printf("Setting nick to: %s\n", sanitized[msg]);
@@ -117,7 +116,7 @@ void* client_callback(void* arg) {
                     free(new_nick);
 
                 if (cinfo->state == 0) {
-                    server_send_numeric(cinfo, 1, ":sup");
+                    server_send_numeric(cinfo, 1, ":Welcome to smirc.");
                     server_join_channel(cinfo, "#smirc");
                     server_join_channel(cinfo, "#mcp");
                     cinfo->state = 1;
@@ -153,22 +152,22 @@ void* client_callback(void* arg) {
             if (strcmp(word[0], "PING") == 0) {
                 server_send_plain(cinfo, "PONG", word[2]);
             }
-            if (cinfo->server->debug)
+            if (cinfo->server->debug) {
                 printf("I> Nick: %s\n", cinfo->nick);
 
-            for(int i = 0; (i < 256) && (word[i] != 0); i+=2) {
-                if (cinfo->server->debug)
-                    printf("%i: %s\n", i/2, word[i]);
-                free(word[i]);
+                for (int i = 0; (i < 256) && (word[i] != 0); i += 2)
+                    printf("%i: %s\n", i / 2, word[i]);
             }
+
+            msg++;
         }
         free(sanitized[0]);
-        free(sanitized[1]);
         free(sanitized);
         memset(client_message, 0, sizeof(char) * 2048);
     }
     free(client_message);
     free(word);
+    free(word_blob);
 
     if(read_size == 0) {
         puts("Client disconnected");

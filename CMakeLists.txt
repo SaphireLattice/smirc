@@ -44,7 +44,7 @@ add_executable(configtest
 #        ${MUD_SOURCES}
 #        ${COMMON_SOURCES})
 
-#target_compile_definitions(mudtest PRIVATE STANDALONE_MUD)
+target_compile_definitions(smirc PRIVATE USING_VALGRIND)
 #target_link_libraries(mudtest
 #        pthread
 #        ${OPENSSL_LIBRARIES})

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <openssl/ossl_typ.h>
+#include <valgrind/memcheck.h>
 
 #include "client.h"
 #include "../ssl.h"
@@ -51,17 +52,23 @@ void send_line_mud(struct minfo* mud, char* line) {
 
 int mud_write(struct minfo* mud, char* buffer, int length) {
     int status;
-    if (mud->use_ssl == 1)
+    if (mud->use_ssl == 1) {
         status = SSL_write(mud->ssl, buffer, length);
-    else
+    } else
         status = (int) write(mud->socket, buffer, (size_t) length);
     return status;
 }
 
 int mud_read(struct minfo* mud) {
     int status;
-    if (mud->use_ssl == 1)
+    if (mud->use_ssl == 1) {
         status = SSL_read(mud->ssl, mud->read_buffer, 1024);
+#ifdef USING_VALGRIND
+        if (status > 0) {
+            VALGRIND_MAKE_MEM_DEFINED(mud->read_buffer, status);
+        }
+#endif
+    }
     else
         status = (int) read(mud->socket, mud->read_buffer, 1024);
     return status;
@@ -126,7 +133,6 @@ void* mud_connect(void* arg) {
         printf("Initializing SSL...\n");
         InitializeSSL();
         const SSL_METHOD *meth = SSLv23_client_method();
-        printf("%i", meth->version);
         SSL_CTX *ctx = SSL_CTX_new(meth);
         if ( ctx == NULL )
         {
@@ -153,7 +159,7 @@ void* mud_connect(void* arg) {
     }
     char* buf = calloc(sizeof(char), 3);
     buf[0] = IAC;
-    buf[1] = DO;
+    buf[1] = WILL;
     char* telnet_protocols = get_protocols();
     for (int p = 0; telnet_protocols[p] != 0; p++) {
         printf("Negotiating %X\n", (unsigned char) telnet_protocols[p]);

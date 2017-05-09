@@ -22,7 +22,6 @@ void config_load(struct config* conf, char* filename) {
 
     char* buf = calloc(sizeof(char *), 1024);
     while (fgets(buf, 1024, file) != NULL) {
-        printf("%s", buf);
         if (strlen(buf) > 0) {
             int state = 0;
             char* ptr = buf - 1;
@@ -199,8 +198,6 @@ struct config_value* config_value_add(struct config *config, char *path, int typ
                     block = (struct config_block **) &(v->data);
                 }
         }
-
-        //printf("%i: %s\n", i, word[i]);
         free(word[i]);
     }
     free(word);
@@ -299,7 +296,6 @@ char* config_value_path(struct config_value* value) {
         path[i] = calloc(sizeof(char *), len + 2);
         memset(path[i], 0, len);
         memcpy(path[i], value->name, len);
-        printf("%s = %s\n", path[i], value->name);
         l += len + 1;
         i += 1;
         if (value->parent != 0)
@@ -312,7 +308,6 @@ char* config_value_path(struct config_value* value) {
     memset(ret, 0, l);
 
     for (i--; i >= 0; i--) {
-        printf("%i: %s\n", i, path[i]);
         strcat(ret, path[i]);
         if (i != 0)
             strcat(ret, ".");

@@ -58,7 +58,7 @@ void server_init(struct irc_server* server) {
                     && (*((int*) config_section_get_value(block->data[i]->data, "autoconnect")->data) == 1))
                 {
                     struct minfo* mud = malloc(sizeof(struct minfo));
-                    mud->ircserver =server;
+                    mud->ircserver = server;
                     mud->name = strdup(block->data[i]->name);
 
                     mud->address = (char*) config_section_get_value(block->data[i]->data, "address")->data;

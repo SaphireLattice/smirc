@@ -115,7 +115,6 @@ void command_connect(struct cmd_env* env) {
         strcat(path, env->args[0]);
         char* start = path + 5 + namel;
 
-        printf("%s\n", path);
         if (env->argc == 1) {
             struct config_value* mud_conf = config_value_get(mud->ircserver->config, path);
             if (mud_conf == 0) {
@@ -125,37 +124,30 @@ void command_connect(struct cmd_env* env) {
             }
             strcat(path, ".");
             strcpy(start, "address");
-            printf("%s\n", path);
             mud->address = (char*) config_value_get(mud->ircserver->config, path)->data;
             strcpy(start, "port");
-            printf("%s\n", path);
             mud->port = *((int*) config_value_get(mud->ircserver->config, path)->data);
             strcpy(start, "ssl");
-            printf("%s\n", path);
             mud->use_ssl = *((int*) config_value_get(mud->ircserver->config, path)->data);
         } else {
             mud->address = strdup(env->args[2]);
             strcat(path, ".");
             strcpy(start, "address");
-            printf("%s\n", path);
             config_value_set(mud->ircserver->config, path, TYPE_STRING, strdup(mud->address));
 
             mud->use_ssl = 0;
             if (env->argc >= 3) {
                 mud->port = atoi(strdup(env->args[4]));
-                if (env->args[4][0] == '+') {
+                if (env->args[4][0] == '+')
                     mud->use_ssl = 1;
-                }
             } else
                 mud->port = 23;
 
             strcpy(start, "port");
-            printf("%s\n", path);
             int *port = malloc(sizeof(int));
             *port = mud->port;
             config_value_set(mud->ircserver->config, path, TYPE_INT, port);
             strcpy(start, "ssl");
-            printf("%s\n", path);
             int *ssl = malloc(sizeof(int));
             *ssl = mud->use_ssl;
             config_value_set(mud->ircserver->config, path, TYPE_INT, ssl);
@@ -182,6 +174,7 @@ void command_disconnect(struct cmd_env* env) {
 
 void command_quit(struct cmd_env* env) {
     shutdown(env->cinfo->server->socket.socket_description, SHUT_RDWR);
+    //TODO: Redo irc_server.c loop to use select to allow for immediate shutdown instead of "on client connect"
 }
 
 void command_debug(struct cmd_env* env) {
@@ -268,8 +261,8 @@ void command_save(struct cmd_env* env) {
 
 void command_load(struct cmd_env* env) {
     if (env->argc == 0)
-        config_save(env->cinfo->server->config, "smirc.conf");
+        config_load(env->cinfo->server->config, "smirc.conf");
     else
-        config_save(env->cinfo->server->config, env->args[0]);
+        config_load(env->cinfo->server->config, env->args[0]);
     commands_output(env, "Loaded!");
 }
