@@ -95,16 +95,8 @@ void command_connect(struct cmd_env* env) {
             commands_output(env, "Error, invalid name. Name must NOT cointain a dot.");
             return;
         }
-
-
+        
         size_t l = namel + 4;
-        char* chan = calloc(sizeof(char), l);
-        memset(chan, 0, sizeof(char) * l);
-        strcpy(chan + 1, env->args[0]);
-        chan[0] = '#';
-        server_join_channel(env->cinfo, chan);
-        free(chan);
-
         char* path = calloc(sizeof(char), l + 36);
         memset(path, 0, sizeof(char) * (l + 36));
         memcpy(path, "mud.", 4);
@@ -154,6 +146,13 @@ void command_connect(struct cmd_env* env) {
             *ssl = mud->use_ssl;
             config_value_set(mud->ircserver->config, path, TYPE_INT, ssl);
         }
+
+        char* chan = calloc(sizeof(char), l);
+        memset(chan, 0, sizeof(char) * l);
+        strcpy(chan + 1, env->args[0]);
+        chan[0] = '#';
+        server_join_channel(env->cinfo, chan);
+        free(chan);
 
         add_mud(mud);
         pthread_create(&mud->thread, NULL, &mud_connect, mud);
