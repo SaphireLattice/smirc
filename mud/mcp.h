@@ -31,6 +31,7 @@ struct mcp_msg {
 };
 
 void mcp_first(struct minfo* mud);
+void mcp_state_free(struct mcp_state* state);
 void mcp_parse(struct minfo* mud);
 
 void mcp_send(struct mcp_msg* mcp_msg);

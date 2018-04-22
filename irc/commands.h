@@ -15,6 +15,7 @@ struct cmd {
 };
 
 void commands_init(struct irc_server* server);
+void commands_free(struct irc_server* server);
 void commands_add(struct irc_server* server, char *name, void (*function)(struct cmd_env* env));
 void commands_run(struct irc_client *cinfo, char *command, int words, char **word);
 

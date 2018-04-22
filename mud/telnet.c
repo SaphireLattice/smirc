@@ -22,8 +22,7 @@ char* get_protocols() {
 }
 
 char* ttoa(unsigned int code) {
-    char* result = calloc(sizeof(char), 6);
-    memset(result, 0, 5);
+    char* result = calloc(6, sizeof(char));
     switch(code) { // There needs to be a better option
         case IAC:
             memcpy(result, "IAC", 4);
@@ -69,19 +68,18 @@ char* ttoa(unsigned int code) {
 
 char* ansi_to_irc_color(char* str) {
     int sl = (int) strlen(str);
-    char* ret = calloc(sizeof(char), strlen(str) + 1);
-    memset(ret, 0, strlen(str) + 1);
+    char* ret = calloc(strlen(str) + 1, sizeof(char));
     int sp, rp;
     sp = 0;
     rp = 0;
 
     struct state* state;
-    state = malloc(sizeof(state));
+    state = malloc(sizeof(struct state));
     state->fg = -1;
     state->bg = -1;
 
     int parsing = 0;
-    char* code = calloc(sizeof(char), 3);
+    char* code = calloc(3, sizeof(char));
     int cp = 0;
     for (sp = 0; sp < sl; sp++ ) {
         if (parsing == 1) {

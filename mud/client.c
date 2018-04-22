@@ -74,39 +74,32 @@ int mud_read(struct minfo* mud) {
     return status;
 }
 
-void* mud_connect(void* arg) {
-    struct minfo* mud = (struct minfo*) arg;
-    printf("M> Starting thread ");
-    send_msg_irc(mud, "info", "Starting connection thread");
+void mud_init(struct minfo* mud) {
+    printf("M> Starting thread\n");
+    send_msg_irc(mud, "info", "Starting connection thread.");
 
     mud->socket = -2;
     mud->irc_buffer = calloc(sizeof(char *), MUD_IRC_BUFFER);
-    memset(mud->irc_buffer, 0, MUD_IRC_BUFFER);
     mud->irc_length = -1;
-    ssize_t n = 0;
     mud->line_length = 0;
     mud->user_length = 0;
     mud->read_buffer = calloc(sizeof(char), 1025);
     mud->line_buffer = calloc(sizeof(char), 1025);
     mud->user_buffer = calloc(sizeof(char), 1025);
-    memset(mud->read_buffer, 0, 1025);
-    memset(mud->line_buffer, 0, 1025);
-    memset(mud->user_buffer, 0, 1025);
     mud->ssl = 0;
-
     mud->mcp_state = 0;
 
     struct sockaddr_in serv_addr;
 
     if((mud->socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        printf("\nError: Could not create socket \n");
+        printf("\nError: Could not create socket\n");
         send_msg_irc(mud, "error", "Error: Could not create socket");
         free_mud(mud);
-        return 0;
+        return;
     }
 
-    memset(&serv_addr, '0', sizeof(serv_addr));
+    memset(&serv_addr, 0, sizeof(serv_addr));
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons((uint16_t) mud->port);
@@ -116,17 +109,16 @@ void* mud_connect(void* arg) {
         printf("\nError: Invalid address (%s)\n", mud->address);
         send_msg_irc(mud, "error", "Error: Invalid address");
         free_mud(mud);
-        return 0;
+        return;
     }
     serv_addr.sin_addr = *((struct in_addr **) he->h_addr_list)[0];
     printf("%s\n",inet_ntoa(serv_addr.sin_addr));
 
-    if( connect(mud->socket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
+    if (connect(mud->socket, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         printf("\nError: Connect Failed\n");
         send_msg_irc(mud, "error", "Error: Conection failed");
         free_mud(mud);
-        return 0;
+        return;
     }
 
     if (mud->use_ssl == 1) {
@@ -138,7 +130,7 @@ void* mud_connect(void* arg) {
         {
             ERR_print_errors_fp(stderr);
             free_mud(mud);
-            return 0;
+            return;
         }
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, verify_callback);
         mud->ssl = SSL_new(ctx);
@@ -151,12 +143,18 @@ void* mud_connect(void* arg) {
             ERR_print_errors_fp(stderr);
             send_msg_irc(mud, "error", "SSL Connection failed");
             free_mud(mud);
-            return 0;
+            return;
         }
         printf("\nConnected with %s encryption\n", SSL_get_cipher(mud->ssl));
         send_msg_irc(mud, "info", "SSL Connection established");
         ShowCerts(mud->ssl);
+    } else {
+        printf("\nConnected\n");
+        send_msg_irc(mud, "info", "Connection established");
     }
+
+    socket_register(&mud->ircserver->socket, mud->socket, SOCKET_CLIENT_TELNET);
+
     char* buf = calloc(sizeof(char), 3);
     buf[0] = IAC;
     buf[1] = WILL;
@@ -167,8 +165,11 @@ void* mud_connect(void* arg) {
         mud_write(mud, buf , 3);
     }
     free(buf);
+}
 
-    printf("Entering read loop...\n");
+void mud_onsocket(struct minfo* mud) {
+    ssize_t n = 0;
+
     while ( (n = mud_read(mud)) > 0) {
         if (mud->ircserver->debug) {
             printf("M> RAW: \"%s\"\nM> HEX: ", mud->read_buffer);
@@ -182,16 +183,21 @@ void* mud_connect(void* arg) {
     if(n == 0) {
         send_msg_irc(mud, "info", "Connection closed.");
         printf("\nConnection closed\n");
+
+        send_msg_irc(mud, "info", "Freeing and stopping.");
+        free_mud(mud);
     }
 
     if(n < 0) {
+        if (errno == EAGAIN)
+            return; // All ok, we read everything and now we just wait.
+
         send_msg_irc(mud, "error", "Read error.");
         perror("Read error");
-    }
 
-    send_msg_irc(mud, "info", "Freeing and stopping.");
-    free_mud(mud);
-    pthread_exit(0);
+        send_msg_irc(mud, "info", "Freeing and stopping.");
+        free_mud(mud);
+    }
 }
 
 void process_buffer(struct minfo* mud) {
@@ -277,6 +283,8 @@ void free_mud(struct minfo *mud) {
     }
     if (mud->socket != -2)
         shutdown(mud->socket, SHUT_RDWR);
+    mcp_state_free(mud->mcp_state);
+    socket_unregister(&mud->ircserver->socket, mud->socket);
     free(mud);
 }
 
@@ -287,17 +295,27 @@ void add_mud(struct minfo* mud) {
     }
     *next = malloc(sizeof(struct irc_mud));
     (*next)->mud = mud;
-    (*next)->next = 0;
+    (*next)->next = NULL;
 }
 
-struct minfo* get_mud(struct irc_server* server, char* channel) {
+struct minfo* get_mud(struct irc_server *server, int fd) {
     struct irc_mud** next = &(server->mud);
-    while (*next != 0) {
+    while (*next != NULL) {
+        if ((*next)->mud->socket == fd)
+            return (*next)->mud;
+        next = &((*next)->next);
+    }
+    return NULL;
+}
+
+struct minfo* get_mud_by_name(struct irc_server *server, char *channel) {
+    struct irc_mud** next = &(server->mud);
+    while (*next != NULL) {
         if (strcmp((*next)->mud->name, channel + (channel[0] == '#' ? 1 : 0)) == 0)
             return (*next)->mud;
         next = &((*next)->next);
     }
-    return 0;
+    return NULL;
 }
 
 void del_mud(struct minfo* mud) { // A-B-C, deleting mud B

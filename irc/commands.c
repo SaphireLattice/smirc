@@ -30,6 +30,15 @@ void commands_init(struct irc_server* server) {
     commands_add(server, "load", &command_load);
 }
 
+void commands_free(struct irc_server* server) {
+    struct cmd* next = server->commands;
+    while (next != 0) {
+        struct cmd* freeing = next;
+        next = next->next;
+        free(freeing);
+    }
+}
+
 void commands_add(struct irc_server* server, char *name, void (*function)(struct cmd_env* env)) {
     struct cmd** next = &(server->commands);
     while (*next != 0)
@@ -75,7 +84,7 @@ void command_connect(struct cmd_env* env) {
     if (env->argc < 1)
         commands_output(env, "Invalid connect command!");
     else {
-        if (get_mud(env->cinfo->server, env->args[0]) != 0) {
+        if (get_mud_by_name(env->cinfo->server, env->args[0]) != 0) {
             commands_output(env, "Error, already connected.");
             return;
         }
@@ -112,39 +121,42 @@ void command_connect(struct cmd_env* env) {
             struct config_value* mud_conf = config_value_get(mud->ircserver->config, path);
             if (mud_conf == 0) {
                 commands_output(env, "Error, no such server stored in config.");
+                free(mud->name);
                 free(mud);
                 free(path);
                 return;
             }
             strcat(path, ".");
             strcpy(start, "address");
-            mud->address = (char*) config_value_get(mud->ircserver->config, path)->data;
+            mud->address = config_value_get(mud->ircserver->config, path)->data.as_string;
             strcpy(start, "port");
-            mud->port = *((int*) config_value_get(mud->ircserver->config, path)->data);
+            mud->port = *config_value_get(mud->ircserver->config, path)->data.as_int;
             strcpy(start, "ssl");
-            mud->use_ssl = *((int*) config_value_get(mud->ircserver->config, path)->data);
+            mud->use_ssl = *config_value_get(mud->ircserver->config, path)->data.as_int;
         } else {
             mud->address = strdup(env->args[2]);
             strcat(path, ".");
             strcpy(start, "address");
-            config_value_set(mud->ircserver->config, path, TYPE_STRING, strdup(mud->address));
+            config_value_set(mud->ircserver->config, path, TYPE_STRING, (union config_data) {strdup(mud->address)});
 
             mud->use_ssl = 0;
             if (env->argc >= 3) {
-                mud->port = atoi(strdup(env->args[4]));
+                char* tmp = strdup(env->args[4]);
+                mud->port = atoi(tmp);
                 if (env->args[4][0] == '+')
                     mud->use_ssl = 1;
+                free(tmp);
             } else
                 mud->port = 23;
 
             strcpy(start, "port");
             int *port = malloc(sizeof(int));
             *port = mud->port;
-            config_value_set(mud->ircserver->config, path, TYPE_INT, port);
+            config_value_set(mud->ircserver->config, path, TYPE_INT, (union config_data) {port});
             strcpy(start, "ssl");
             int *ssl = malloc(sizeof(int));
             *ssl = mud->use_ssl;
-            config_value_set(mud->ircserver->config, path, TYPE_INT, ssl);
+            config_value_set(mud->ircserver->config, path, TYPE_INT, (union config_data) {ssl});
         }
 
         char* chan = calloc(sizeof(char), l);
@@ -155,7 +167,7 @@ void command_connect(struct cmd_env* env) {
         free(chan);
 
         add_mud(mud);
-        pthread_create(&mud->thread, NULL, &mud_connect, mud);
+        mud_init(mud);
         free(path);
     }
 }
@@ -164,7 +176,7 @@ void command_disconnect(struct cmd_env* env) {
     if (env->argc < 1)
         commands_output(env, "Invalid connect command!");
     else {
-        struct minfo *mud = get_mud(env->cinfo->server, env->args[0]);
+        struct minfo *mud = get_mud_by_name(env->cinfo->server, env->args[0]);
         if (mud != 0) {
             shutdown(mud->socket, SHUT_RD);
             del_mud(mud);
@@ -174,15 +186,20 @@ void command_disconnect(struct cmd_env* env) {
 }
 
 void command_quit(struct cmd_env* env) {
-    shutdown(env->cinfo->server->socket.socket_description, SHUT_RDWR);
+    env->cinfo->server->quit = 1;
     //TODO: Redo irc_server.c loop to use select to allow for immediate shutdown instead of "on client connect"
 }
 
 void command_debug(struct cmd_env* env) {
-    if (env->argc > 0 && strcasecmp(env->args[0], "off"))
+    if (env->argc > 0 && strcasecmp(env->args[0], "off") == 0) {
         env->cinfo->server->debug = 0;
-    else
+    } else if (env->argc > 0 && strcasecmp(env->args[0], "on") == 0) {
         env->cinfo->server->debug = 1;
+    }
+    if (env->cinfo->server->debug == 1)
+        commands_output(env, "Debug enabled.");
+    else
+        commands_output(env, "Debug disabled.");
 }
 
 void command_list(struct cmd_env* env) {
@@ -201,13 +218,16 @@ void command_list(struct cmd_env* env) {
         char* tmp = pad_left(15, ' ', curr->mud->name);
         strcat(cat, tmp);
         free(tmp);
+
         tmp = pad_left(24, ' ', curr->mud->address);
         strcat(cat, tmp);
         free(tmp);
+
         tmp = pad_left(6, ' ', port);
         strcat(cat, tmp);
         strcat(cat, curr->mud->use_ssl ? "" : " ssl");
         free(tmp);
+
         free(port);
         server_send_user_channel(env->cinfo, "smirc", "smirc", cat);
         free(cat);
@@ -216,14 +236,14 @@ void command_list(struct cmd_env* env) {
     server_send_user_channel(env->cinfo, "smirc", "smirc", "Not connected: ");
     struct config_value* servers = config_value_get(env->cinfo->server->config, "mud");
     if (servers != 0) {
-        struct config_block* block = (struct config_block*) servers->data;
+        struct config_block* block = servers->data.as_section;
         while (block != 0) {
             for (int i = 0; i < CONFIG_BLOCK_SIZE; i++) {
-                if (block->data[i] != 0 && get_mud(env->cinfo->server, block->data[i]->name) == 0) {
+                if (block->data[i] != 0 && get_mud_by_name(env->cinfo->server, block->data[i]->name) == 0) {
                     char* port = calloc(sizeof(char), 7);
-                    itoa(*((int *) config_section_get_value(block->data[i]->data, "port")->data), port, 10);
+                    itoa(*config_section_get_value(block->data[i]->data.as_section, "port")->data.as_int, port, 10);
                     char* name = block->data[i]->name;
-                    char* address = (char *) config_section_get_value(block->data[i]->data, "address")->data;
+                    char* address = config_section_get_value(block->data[i]->data.as_section, "address")->data.as_string;
 
                     size_t namel = strlen(name);
                     size_t addressl = strlen(address);
@@ -239,7 +259,7 @@ void command_list(struct cmd_env* env) {
                     free(tmp);
                     tmp = pad_left(6, ' ', port);
                     strcat(cat, tmp);
-                    strcat(cat, *((int *) config_section_get_value(block->data[i]->data, "ssl")->data) ? "" : " ssl");
+                    strcat(cat, (*config_section_get_value(block->data[i]->data.as_section, "ssl")->data.as_int) ? "" : " ssl");
                     free(tmp);
                     free(port);
                     server_send_user_channel(env->cinfo, "smirc", "smirc", cat);

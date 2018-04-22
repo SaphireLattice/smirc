@@ -4,36 +4,14 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <poll.h>
+#include <errno.h>
 
 #include "irc/irc_server.h"
 #include "config.h"
-
-/*pthread_t tid[2];
-struct irc_server* server;
-
-void* doSomeThing(void *arg) {
-    pthread_t id = pthread_self();
-
-    if(pthread_equal(id,tid[0])) {
-        server_loop(server);
-    } else {
-        / *struct minfo *mud = malloc(sizeof(struct minfo));
-        memset(mud, 0, sizeof(struct minfo));
-        mud->ircserver = server;
-        printf("%s\n", server->name);
-        mud->address = ((char**)arg)[1];
-        mud->port = atoi(((char**)arg)[2]);
-        mud->use_ssl = 0;//1;
-        mud_connect(mud);* /
-    }
-
-    printf("Thread #%lu dead\n", id);
-    return NULL;
-}*/
+#include "mud/client.h"
 
 int main(int argc, char** args) {
-    //int i = 0;
-    //int err;
     struct irc_server* server;
 
     struct config* config = config_new();
@@ -45,23 +23,51 @@ int main(int argc, char** args) {
     server->mud = 0;
     server->config = config;
 
-    server_init(server);
-    server_loop(server);
-    /*
-    while(i < 2) {
-        err = pthread_create(&(tid[i]), NULL, &doSomeThing, args);
+    if (server_init(server) < 0) {
+        return errno;
+    };
 
-        if (err != 0)
-            printf("Can't create thread :[%s]", strerror(err));
-        else
-            printf("Thread created successfully\n");
+    int pollerr = 0;
+    while(1) {
+        int pr = poll(server->socket.fds, server->socket.fd_num, 3*60*1000);
+        if (pr == -1) {
+            pollerr = errno;
+            break;
+        }
 
-        i++;
+        for (int i = 0; i < server->socket.fd_num; i++) {
+            if (server->quit != 0)
+                break;
+            struct pollfd pfd = server->socket.fds[i];
+            if (pfd.fd != -1 && pfd.revents != 0) {
+                int type = server->socket.fd_map[i].fd_type;
+                switch(type) {
+                    case SOCKET_SERVER_IRC:
+                        server_onsocket(server);
+                        break;
+                    case SOCKET_CLIENT_IRC:
+                        client_onsocket(get_client(server, pfd.fd));
+                        break;
+                    case SOCKET_CLIENT_TELNET:
+                        mud_onsocket(get_mud(server, pfd.fd));
+                        break;
+                    default:
+                        printf("Unknown socket: fd %d, type %d\n", pfd.fd, type);
+                        socket_unregister(&server->socket, pfd.fd);
+                }
+            }
+        }
+        if (server->quit != 0)
+            break;
     }
 
-    for (;i > 0; i--)
-        pthread_join(tid[i - 1], NULL);
-    */
+    config_free(config);
+    server_free(server);
+
+    if (pollerr != 0) {
+        printf("Error: %s\n", strerror(pollerr));
+        return pollerr;
+    }
     printf("Main: return 0");
     return 0;
 }

@@ -37,12 +37,14 @@ void send_line_mud(struct minfo* mud_l, char* line);
 int mud_write(struct minfo* mud, char* buffer, int length);
 int mud_read(struct minfo* mud);
 
-void* mud_connect(void* arg);
+void mud_init(struct minfo* mud);
+void mud_onsocket(struct minfo* mud);
 void process_buffer(struct minfo* mud);
 
 void free_mud(struct minfo *mud);
 void add_mud(struct minfo* mud);
-struct minfo* get_mud(struct irc_server* server, char* channel);
+struct minfo* get_mud(struct irc_server *server, int fd);
+struct minfo* get_mud_by_name(struct irc_server *server, char *channel);
 void del_mud(struct minfo* mud);
 
 #endif //SMIRC_MUD_CLIENT_H

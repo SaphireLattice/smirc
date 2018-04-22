@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <error.h>
+#include <errno.h>
 
 #include "irc_client.h"
 #include "irc_server.h"
@@ -36,12 +37,22 @@ char** sanitize(char* str) {
     return pointers;
 }
 
+struct irc_client* get_client(struct irc_server* server, int socket) {
+    struct irc_client** clients = server->clients;
+    int i;
+    for (i = 0; (i < MAX_CLIENTS); i++) {
+        if (clients[i] != 0 && clients[i]->socket == socket)
+            return clients[i];
+    };
+    return NULL;
+}
+
 struct irc_client* add_client(struct irc_server* server) {
     struct irc_client** clients = server->clients;
     int i = 0;
     for (; (i < MAX_CLIENTS && clients[i] != 0); i++);
     if (i == MAX_CLIENTS)
-        return 0;
+        return NULL;
     clients[i] = malloc(sizeof(struct irc_client));
     clients[i]->id = i;
     clients[i]->state = 0;
@@ -56,14 +67,16 @@ void rem_client(struct irc_client* client) {
     for (; (client->server->clients[i] != 0 && client != client->server->clients[i]); i++);
     if (i == MAX_CLIENTS)
         return;
+
     shutdown(client->socket, SHUT_RD);
+    socket_unregister(&client->server->socket, client->socket);
     client->server->clients[i] = 0;
+    free(client->addr);
     free(client->nick);
     free(client);
 }
 
-void* client_callback(void* arg) {
-    struct irc_client* cinfo = (struct irc_client*) arg;
+void client_onsocket(struct irc_client* cinfo) {
     long read_size;
     char* client_message = calloc(sizeof(char), 2048);
     memset(client_message, 0, sizeof(char) * 2048);
@@ -143,7 +156,7 @@ void* client_callback(void* arg) {
                 if (strcmp(word[2], "#smirc") == 0) {
                     commands_run(cinfo, word[4] + 1, words - 2, &(word[6]));
                 } else {
-                    struct minfo* mud = get_mud(cinfo->server, word[2]);
+                    struct minfo* mud = get_mud_by_name(cinfo->server, word[2]);
                     if (mud != 0) {
                         send_line_mud(mud, word[5] + 1);
                     }
@@ -169,17 +182,21 @@ void* client_callback(void* arg) {
     free(word);
     free(word_blob);
 
+    if (cinfo->server->quit) {
+        rem_client(cinfo);
+    }
+
     if(read_size == 0) {
         puts("Client disconnected");
         fflush(stdout);
+        rem_client(cinfo);
     }
 
     else if(read_size == -1) {
+        if (errno == EAGAIN)
+            return; // All ok, we read everything and now we just wait.
         perror("Socket recv failed");
     }
-
-    rem_client(cinfo);
-    return 0;
 }
 
 

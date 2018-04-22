@@ -23,6 +23,7 @@ void mcp_first(struct minfo* mud) {
 
     mud->mcp_state->mud = mud;
     mud->mcp_state->key = 0;
+    mud->mcp_state->data_tag = 0;
 
     struct mcp_msg* msg = mcp_decompose(mud->mcp_state, mud->user_buffer);
 
@@ -43,6 +44,13 @@ void mcp_first(struct minfo* mud) {
     mud->mcp_state->key = key;
 
     mcp_free(msg);
+}
+
+void mcp_state_free(struct mcp_state* state) {
+    if (state->data_tag != NULL)
+        free(state->data_tag);
+    free(state->key);
+    free(state);
 }
 
 void mcp_parse(struct minfo* mud) {
@@ -87,12 +95,8 @@ char* mcp_compose(struct mcp_msg* mcp_msg) {
     }
     *(mptr++) = '\r';
     *(mptr++) = '\n';
-    *(mptr++) = '\0';
+    *(mptr) = '\0';
     printf("P< %s", msg);
-    char* tmp = calloc(sizeof(char), 515);
-    memset(tmp, 0, sizeof(char) * 515);
-    strcat(tmp, "P< ");
-    strcat(tmp, msg);
     server_send_channel(mcp_msg->state->mud->ircserver, "mcp", mcp_msg->state->mud->name, msg);
     return msg;
 }
@@ -101,7 +105,6 @@ char* mcp_compose(struct mcp_msg* mcp_msg) {
 // <message-multiline-continue> ::= '*' <space> <datatag> <space> <simple-key> ':' ' ' <line>
 // <message-multiline-end> ::= ':' <space> <datatag>
 struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
-    //printf("decompose\n");
     struct mcp_msg* msg = mcp_new_msg();
     msg->state = state;
     char* ptr = str + 3;
@@ -128,9 +131,6 @@ struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
     char* key = calloc(sizeof(char), len);
     char* wptr = word;
     msg->msg_name = calloc(sizeof(char), 32);
-    memset(word, 0, len);
-    memset(key, 0, len);
-    memset(msg->msg_name, 0, 32);
 
     fputs("P>", fbuffer);
     char* start = ptr;
@@ -183,7 +183,7 @@ struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
                     // Shouldn't happen, but won't hurt to check, also can tell about other parsing errors
                     if ((msg_state & COLON) == 0) {
                         fputs("\x1b[0mP>\x1b[0;1;31m!MCP Error: no colon after key\x1b[0m", fbuffer);
-                        return msg;
+                        break;
                     }
                     memset(key, 0, len);
                     strcpy(key, word);
@@ -210,8 +210,12 @@ struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
                         ptr++;
                         if (*ptr == 0 || *ptr == '\n') { // Just in case..
                             free(word);
-                            return msg;
+                            word = 0;
+                            break;
                         }
+                    }
+                    if (*ptr == 0 || *ptr == '\n') {
+                        break;
                     }
                     start = ptr;
                 }
@@ -247,7 +251,8 @@ struct mcp_msg* mcp_decompose(struct mcp_state* state, char* str) {
     free(tmp);
     fclose(fbuffer);
     free(buffer);
-    free(word);
+    if (word != NULL)
+        free(word);
     free(key);
     return msg;
 }

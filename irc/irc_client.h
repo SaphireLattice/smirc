@@ -6,15 +6,16 @@
 #define MAX_CLIENTS 8
 
 struct irc_client {
+  struct sockaddr_in* addr;
   struct irc_server* server;
   int id;
   int socket;
-  pthread_t cl_thread;
   int state;
   char* nick;
 };
 
-void* client_callback(void* arg);
+void client_onsocket(struct irc_client* client);
+struct irc_client* get_client(struct irc_server* server, int socket);
 struct irc_client* add_client(struct irc_server* server);
 void rem_client(struct irc_client* client);
 
